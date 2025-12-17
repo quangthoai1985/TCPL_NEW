@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Quy tắc cho đường dẫn tải lên hồ sơ minh chứng
+    // hoso/{communeId}/evidence/{periodId}/{indicatorId}/{...}/{fileName}
+    match /hoso/{communeId}/{allPaths=**} {
+      
+      // Chỉ cho phép đọc/ghi nếu communeId trong đường dẫn khớp với communeId của người dùng
+      // Hoặc nếu người dùng là admin
+      allow read, write: if request.auth != null &&
+                          (request.auth.token.role == 'admin' || 
+                           request.auth.token.communeId == communeId);
+    }
+    
+    // Quy tắc cho đường dẫn config (ví dụ: ảnh nền login)
+    match /config/{allPaths=**} {
+      allow read: if true; // Cho phép mọi người đọc (để hiển thị ảnh nền)
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+  }
+}

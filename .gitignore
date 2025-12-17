@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+/.venv/
+
+# Next.js
+.next/
+out/
+build/
+
+# Env files
+.env
+.env*.local
+
+# Firebase credentials - QUAN TRỌNG
+service-account-credentials.json
+**/service-account-credentials.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# Others
+.DS_Store
+*.pem
+.vercel
