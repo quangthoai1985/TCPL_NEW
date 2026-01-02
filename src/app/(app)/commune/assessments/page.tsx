@@ -1100,7 +1100,7 @@ export default function SelfAssessmentPage() {
         <div className="flex flex-col h-[calc(100vh-188px)] overflow-hidden bg-gray-50/50">
             {/* Sticky Header - Now Fixed via Flex */}
             <div className="flex-none bg-background/95 backdrop-blur z-50 border-b shadow-sm px-4 py-3 sm:px-8 mb-0">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-7xl mx-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-[1600px] mx-auto">
                     <div>
                         <h1 className="font-bold text-lg">Đánh giá chuẩn tiếp cận pháp luật</h1>
                         <p className="text-sm text-muted-foreground hidden sm:block">
@@ -1130,7 +1130,7 @@ export default function SelfAssessmentPage() {
 
             {/* Main Content - Scrollable */}
             <div className="flex-1 overflow-y-auto scroll-smooth min-h-0">
-                <div className="max-w-5xl mx-auto space-y-8 p-4 sm:p-6 pb-32">
+                <div className="max-w-[1600px] mx-auto space-y-8 p-4 sm:p-6 pb-32">
 
                     {/* Intro Card */}
                     {!activePeriod && (
@@ -1161,9 +1161,8 @@ export default function SelfAssessmentPage() {
 
                                 if (criterion.id === 'TC01') {
                                     return (
-                                        <div key={criterion.id} className="relative">
-                                            <div className="absolute -left-3 top-6 bottom-6 w-1 bg-slate-200 rounded-full hidden xl:block"></div>
-                                            <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] ${criterionStatus === 'achieved'
+                                        <div key={criterion.id} className="relative w-full">
+                                            <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] w-full ${criterionStatus === 'achieved'
                                                 ? 'border-green-300 shadow-lg shadow-green-100/60 bg-gradient-to-br from-white to-green-50/30'
                                                 : criterionStatus === 'not-achieved'
                                                     ? 'border-red-300 shadow-lg shadow-red-100/60 bg-gradient-to-br from-white to-red-50/30'
@@ -1190,9 +1189,8 @@ export default function SelfAssessmentPage() {
                                 }
 
                                 return (
-                                    <div key={criterion.id} className="relative">
-                                        <div className="absolute -left-3 top-6 bottom-6 w-1 bg-slate-200 rounded-full hidden xl:block"></div>
-                                        <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] ${criterionStatus === 'achieved'
+                                    <div key={criterion.id} className="relative w-full">
+                                        <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] w-full ${criterionStatus === 'achieved'
                                             ? 'border-green-300 shadow-lg shadow-green-100/60 bg-gradient-to-br from-white to-green-50/30'
                                             : criterionStatus === 'not-achieved'
                                                 ? 'border-red-300 shadow-lg shadow-red-100/60 bg-gradient-to-br from-white to-red-50/30'
@@ -1324,7 +1322,7 @@ export default function SelfAssessmentPage() {
                                                                                 const childData = assessmentData[child.id];
                                                                                 if (!childData) return null;
                                                                                 return (
-                                                                                    <div className="pl-4 border-l-2 border-slate-100 mt-4">
+                                                                                    <div className="mt-2">
                                                                                         {renderIndicator(child, childData)}
                                                                                     </div>
                                                                                 );
@@ -1453,11 +1451,12 @@ export default function SelfAssessmentPage() {
         if (!data) return null;
 
         const indicatorStatus = data.status || 'pending';
+        // Reduced margin-bottom and padding for a tighter, cleaner look
         const blockClasses = cn(
-            'mb-8 last:mb-0 rounded-lg border-2 p-6 transition-colors',
-            indicatorStatus === 'achieved' && 'bg-green-50 border-green-200',
-            indicatorStatus === 'not-achieved' && 'bg-red-50 border-red-200',
-            indicatorStatus === 'pending' && 'bg-amber-50 border-amber-200'
+            'mb-4 last:mb-0 rounded-lg border-2 p-4 transition-colors shadow-sm w-full max-w-full overflow-hidden',
+            indicatorStatus === 'achieved' && 'bg-green-50 border-green-300',
+            indicatorStatus === 'not-achieved' && 'bg-red-50 border-red-300',
+            indicatorStatus === 'pending' && 'bg-amber-50 border-amber-300'
         );
 
         // Wrapper to add spacing/styling to indicators if needed

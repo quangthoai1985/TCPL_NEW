@@ -12,148 +12,25 @@ import PageHeader from '@/components/layout/page-header';
 import type { LoginConfig } from '@/lib/data';
 // FIXME: Firebase storage removed - needs MinIO refactoring
 // import { getDownloadURL, ref, uploadBytes, listAll, deleteObject, StorageReference } from 'firebase/storage';
-import { Loader2, Trash2, UploadCloud, CheckCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+// Unused UI components removed
 
-interface ImageAsset {
-    url: string;
-    ref: StorageReference;
-}
+
+
 
 function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: React.ReactNode, onSelect: (url: string) => void, storagePath: string }) {
-    const { storage } = useData();
     const { toast } = useToast();
-    const [assets, setAssets] = useState<ImageAsset[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [deletingAsset, setDeletingAsset] = useState<ImageAsset | null>(null);
 
-    const fetchAssets = useCallback(async () => {
-        if (!storage) return;
-        setIsLoading(true);
-        try {
-            const folderRef = ref(storage, storagePath);
-            const res = await listAll(folderRef);
-            const assetPromises = res.items.map(async (itemRef) => {
-                const url = await getDownloadURL(itemRef);
-                return { url, ref: itemRef };
-            });
-            const fetchedAssets = await Promise.all(assetPromises);
-            setAssets(fetchedAssets);
-        } catch (error) {
-            console.error("Error fetching assets:", error);
-            toast({ variant: 'destructive', title: 'Lỗi', description: 'Không thể tải danh sách ảnh.' });
-        } finally {
-            setIsLoading(false);
-        }
-    }, [storage, storagePath, toast]);
-
-    useEffect(() => {
-        if (isDialogOpen) {
-            fetchAssets();
-        }
-    }, [isDialogOpen, fetchAssets]);
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !storage) return;
-
-        setIsUploading(true);
-        try {
-            const filePath = `${storagePath}/${file.name}`;
-            const storageRef = ref(storage, filePath);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            toast({ title: 'Thành công', description: 'Đã tải lên ảnh mới.' });
-            onSelect(downloadURL);
-            setIsDialogOpen(false);
-        } catch (error) {
-            console.error("Upload error:", error);
-            toast({ variant: 'destructive', title: 'Lỗi', description: 'Không thể tải lên tệp.' });
-        } finally {
-            setIsUploading(false);
-        }
+    // Firebase storage is removed, so we disable the picker for now.
+    const handleClick = () => {
+        toast({ title: 'Thông báo', description: 'Tính năng tải ảnh đang tạm khóa. Hệ thống đang sử dụng ảnh mặc định từ thư mục Config.' });
     };
 
-    const handleDelete = async () => {
-        if (!deletingAsset) return;
-        try {
-            await deleteObject(deletingAsset.ref);
-            toast({ title: 'Đã xóa', description: `Đã xóa ảnh ${deletingAsset.ref.name}` });
-            setAssets(prev => prev.filter(a => a.url !== deletingAsset.url));
-            setDeletingAsset(null);
-        } catch (error) {
-            console.error("Delete error:", error);
-            toast({ variant: 'destructive', title: 'Lỗi', description: 'Không thể xóa tệp.' });
-        }
-    }
-
     return (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>{triggerButton}</DialogTrigger>
-            <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>Chọn hoặc tải lên ảnh</DialogTitle>
-                </DialogHeader>
-                <div className="flex-1 min-h-0">
-                    <ScrollArea className="h-full pr-4">
-                        {isLoading ? (
-                            <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                        ) : (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                                {assets.map(asset => (
-                                    <div key={asset.url} className="relative group aspect-square">
-                                        <Image src={asset.url} alt="asset" fill objectFit="cover" className="rounded-md border" />
-                                        <div
-                                            className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-md"
-                                            onClick={() => { onSelect(asset.url); setIsDialogOpen(false); }}
-                                        >
-                                            <CheckCircle className="h-10 w-10 text-white" />
-                                        </div>
-                                        <Button
-                                            variant="destructive" size="icon"
-                                            className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            onClick={() => setDeletingAsset(asset)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                                <label className="relative flex flex-col items-center justify-center aspect-square border-2 border-dashed rounded-md cursor-pointer hover:bg-muted transition-colors">
-                                    <UploadCloud className="h-10 w-10 text-muted-foreground" />
-                                    <span className="mt-2 text-sm text-center text-muted-foreground">Tải ảnh mới</span>
-                                    <Input type="file" className="absolute inset-0 opacity-0 w-full h-full" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
-                                    {isUploading && <Loader2 className="absolute h-6 w-6 animate-spin" />}
-                                </label>
-                            </div>
-                        )}
-                    </ScrollArea>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Đóng</Button>
-                </DialogFooter>
-            </DialogContent>
-
-            <AlertDialog open={!!deletingAsset} onOpenChange={(open) => !open && setDeletingAsset(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Bạn có chắc chắn muốn xóa ảnh này khỏi Storage không? Hành động này không thể hoàn tác.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Hủy</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </Dialog>
+        <div onClick={handleClick}>
+            {triggerButton}
+        </div>
     )
 }
 
@@ -165,9 +42,26 @@ export default function LoginConfigPage() {
     const [config, setConfig] = useState<Partial<LoginConfig>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const DEFAULT_CONFIG = {
+        primaryLogoUrl: '/config/logo/BoTuPhap1.png',
+        secondaryLogoUrl: '/config/logo_secondary/Logo_tỉnh_An_Giang.svg',
+        backgroundImageUrl: '/config/background/aPix-image-15.jpg',
+    };
+
     useEffect(() => {
         if (loginConfig) {
-            setConfig(loginConfig);
+            const cleanConfig = { ...loginConfig };
+
+            if (cleanConfig.primaryLogoUrl?.includes('firebasestorage')) cleanConfig.primaryLogoUrl = DEFAULT_CONFIG.primaryLogoUrl;
+            if (cleanConfig.secondaryLogoUrl?.includes('firebasestorage')) cleanConfig.secondaryLogoUrl = DEFAULT_CONFIG.secondaryLogoUrl;
+            if (cleanConfig.backgroundImageUrl?.includes('firebasestorage')) cleanConfig.backgroundImageUrl = DEFAULT_CONFIG.backgroundImageUrl;
+
+            setConfig({
+                ...cleanConfig,
+                primaryLogoUrl: cleanConfig.primaryLogoUrl || DEFAULT_CONFIG.primaryLogoUrl,
+                secondaryLogoUrl: cleanConfig.secondaryLogoUrl || DEFAULT_CONFIG.secondaryLogoUrl,
+                backgroundImageUrl: cleanConfig.backgroundImageUrl || DEFAULT_CONFIG.backgroundImageUrl,
+            });
         }
     }, [loginConfig]);
 
@@ -181,11 +75,8 @@ export default function LoginConfigPage() {
     }
 
     const handleSave = async () => {
-        if (!storage) {
-            toast({ variant: 'destructive', title: 'Lỗi', description: 'Dịch vụ lưu trữ chưa sẵn sàng.' });
-            return;
-        }
         setIsSubmitting(true);
+
 
         try {
             await updateLoginConfig(config as LoginConfig);

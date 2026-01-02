@@ -17,13 +17,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { authenticate } from '@/actions/auth-actions';
 
-// Mock config for now since DataContext is being replaced
+// Mock config updated to local paths
 const loginConfig = {
-  backgroundImageUrl: undefined,
-  primaryLogoUrl: "/logo.png",
+  backgroundImageUrl: '/config/background/aPix-image-15.jpg',
+  primaryLogoUrl: '/config/logo/BoTuPhap1.png',
   primaryLogoWidth: 100,
   primaryLogoHeight: 100,
-  secondaryLogoUrl: "https://firebasestorage.googleapis.com/v0/b/chuan-tiep-can-pl.firebasestorage.app/o/config%2Flogo_secondary%2FLogo_t%E1%BB%89nh_An_Giang.svg?alt=media&token=77aa4898-eb83-46fc-95ce-fa1f34c81eec",
+  secondaryLogoUrl: '/config/logo_secondary/Logo_tỉnh_An_Giang.svg',
   secondaryLogoWidth: 160,
   secondaryLogoHeight: 160,
 };

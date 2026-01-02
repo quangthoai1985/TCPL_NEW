@@ -378,7 +378,7 @@ const RenderTC1LikeIndicator = ({
                                                     onPreview={onPreview}
                                                     periodId={periodId}
                                                     communeId={communeId}
-                                                    accept=".pdf, .doc, .docx, .xls, .xlsx"
+                                                    accept=".pdf"
                                                     issueDate={doc.issueDate}
                                                     issuanceDeadlineDays={doc.issuanceDeadlineDays}
                                                 />
