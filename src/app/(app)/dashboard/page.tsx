@@ -61,7 +61,7 @@ import type { Assessment, Unit, Criterion, IndicatorResult } from '@/lib/data';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { uploadRegistrationFile } from '@/actions/storageActions';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -344,7 +344,7 @@ const AdminDashboard = () => {
 };
 
 const CommuneDashboard = () => {
-    const { storage, assessments, currentUser, assessmentPeriods, updateAssessments, deleteAssessment, criteria } = useData();
+    const { storage, assessments, currentUser, assessmentPeriods, updateAssessment, deleteAssessment, criteria } = useData();
     const { toast } = useToast();
     const [registrationFile, setRegistrationFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -367,11 +367,16 @@ const CommuneDashboard = () => {
 
 
     const uploadFileAndGetURL = async (periodId: string, communeId: string, file: File): Promise<string> => {
-        if (!storage) throw new Error("Firebase Storage is not initialized.");
-        const filePath = `hoso/${communeId}/registration/${periodId}/${file.name}`;
-        const storageRef = ref(storage, filePath);
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('communeId', communeId);
+        formData.append('periodId', periodId);
+
+        const result = await uploadRegistrationFile(formData);
+        if (!result.success || !result.url) {
+            throw new Error(result.error || "Upload failed");
+        }
+        return result.url;
     };
 
     const handleRegister = async () => {
@@ -395,11 +400,12 @@ const CommuneDashboard = () => {
                 registrationFormUrl: fileUrl,
             };
 
-            await updateAssessments([...assessments, newAssessment]);
+            await updateAssessment(newAssessment);
             toast({ title: 'Thành công', description: 'Đã gửi đơn đăng ký. Vui lòng chờ Admin duyệt.' });
         } catch (error) {
             console.error("File upload error: ", error);
-            toast({ variant: 'destructive', title: 'Lỗi tải tệp', description: 'Đã xảy ra lỗi khi tải tệp lên. Vui lòng kiểm tra lại quy tắc bảo mật của Storage và thử lại.' });
+            const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";
+            toast({ variant: 'destructive', title: 'Lỗi tải tệp', description: errorMessage });
         } finally {
             setIsSubmitting(false);
         }
@@ -422,11 +428,12 @@ const CommuneDashboard = () => {
                 registrationSubmissionDate: new Date().toLocaleDateString('vi-VN'),
             };
 
-            await updateAssessments(assessments.map(a => a.id === myAssessment.id ? updatedAssessment : a));
+            await updateAssessment(updatedAssessment);
             toast({ title: 'Thành công', description: 'Đã gửi lại đơn đăng ký. Vui lòng chờ Admin duyệt.' });
         } catch (error) {
             console.error("File re-upload error: ", error);
-            toast({ variant: 'destructive', title: 'Lỗi tải tệp', description: 'Đã xảy ra lỗi khi tải tệp lên. Vui lòng thử lại.' });
+            const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";
+            toast({ variant: 'destructive', title: 'Lỗi tải tệp', description: errorMessage });
         } finally {
             setIsSubmitting(false);
         }

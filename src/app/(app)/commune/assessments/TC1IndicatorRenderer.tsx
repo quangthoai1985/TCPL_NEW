@@ -195,6 +195,8 @@ const TC1IndicatorRenderer = ({
                                                     periodId={periodId}
                                                     communeId={communeId}
                                                     accept=".pdf"
+                                                    issueDate={doc.issueDate}
+                                                    issuanceDeadlineDays={doc.issuanceDeadlineDays}
                                                 />
                                                 {isRequired && (
                                                     <p className="text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded">

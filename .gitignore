@@ -18,8 +18,24 @@ service-account-credentials.json
 **/service-account-credentials.json
 serviceAccountKey.json
 firebase-adminsdk*.json
+*-adminsdk-*.json
+
+# Build artifacts
+tsconfig.tsbuildinfo
+.modified
+
+# IDE & Editors
+.DS_Store
+.vscode/
+.Gemini/
+.idx/
+
+# Backup files
+*.zip
+*.bak
+*.backup
 
 # Others
-.DS_Store
 *.pem
 .vercel
+/generated/prisma

@@ -18,7 +18,7 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
     const handleCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const count = e.target.value === '' ? undefined : Number(e.target.value);
         const newCount = count !== undefined ? Math.max(0, count) : undefined;
-    
+
         setFormData(prev => {
             const currentDocuments = prev.documents || [];
             const finalCount = newCount ?? 0;
@@ -32,7 +32,7 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
             };
         });
     };
-    
+
     const handleDocumentChange = (index: number, field: 'name' | 'issueDate' | 'excerpt' | 'issuanceDeadlineDays', value: string | number) => {
         setFormData(prev => {
             const newDocuments = [...(prev.documents || [])];
@@ -44,16 +44,15 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
     };
 
     const handleSave = () => {
-        // Clone the form data but exclude the 'indicators' array
-        const { indicators, ...dataToSave } = formData;
-        onSave(dataToSave as Criterion);
-        toast({ title: "Thành công!", description: "Đã lưu cấu hình cho Tiêu chí 1."});
+        // Pass full formData to preserve indicators
+        onSave(formData as Criterion);
+        toast({ title: "Thành công!", description: "Đã lưu cấu hình cho Tiêu chí 1." });
     }
 
     const handleTypeChange = (value: 'quantity' | 'specific') => {
         setFormData(prev => {
             const newFormData = { ...prev, assignmentType: value };
-    
+
             if (value === 'specific') {
                 const count = prev.assignedDocumentsCount || 0;
                 const currentDocuments = prev.documents || [];
@@ -61,9 +60,9 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
                     return currentDocuments[i] || { name: '', issueDate: '', excerpt: '', issuanceDeadlineDays: 30 };
                 });
             } else {
-                newFormData.documents = []; 
+                newFormData.documents = [];
             }
-            
+
             return newFormData;
         });
     };
@@ -71,9 +70,9 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
     return (
         <div className="p-4 border rounded-lg bg-blue-50/50 border-blue-200 mb-6 space-y-6">
             <h4 className='font-semibold text-primary'>Cấu hình đặc biệt: Giao nhiệm vụ cho Tiêu chí 1</h4>
-            
-            <RadioGroup 
-                value={formData.assignmentType || 'specific'} 
+
+            <RadioGroup
+                value={formData.assignmentType || 'specific'}
                 onValueChange={handleTypeChange}
                 className="my-4 grid grid-cols-1 md:grid-cols-2 gap-4"
             >
@@ -92,10 +91,10 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
                 <>
                     <div className="grid gap-2">
                         <Label htmlFor="assignedDocumentsCount">Số lượng văn bản được giao</Label>
-                        <Input id="assignedDocumentsCount" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Ví dụ: 5" className="w-48"/>
+                        <Input id="assignedDocumentsCount" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Ví dụ: 5" className="w-48" />
                         <p className="text-sm text-muted-foreground">Nhập số lượng văn bản để hệ thống tạo ra các trường tương ứng bên dưới.</p>
                     </div>
-                    
+
                     {(formData.documents || []).length > 0 && (
                         <div className="space-y-4 pt-4 border-t">
                             <h5 className="font-medium">Chi tiết các văn bản được giao</h5>
@@ -135,14 +134,14 @@ function Criterion1Config({ criterion, onSave }: { criterion: Criterion, onSave:
             {formData.assignmentType === 'quantity' && (
                 <div className="grid gap-2">
                     <Label htmlFor="assignedDocumentsCountQty">Số lượng VBQPPL được giao ban hành trong năm</Label>
-                    <Input id="assignedDocumentsCountQty" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Để trống hoặc nhập 0 để xã tự điền" className="w-64"/>
+                    <Input id="assignedDocumentsCountQty" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Để trống hoặc nhập 0 để xã tự điền" className="w-64" />
                     <p className="text-sm text-muted-foreground">Nhập số lượng văn bản được giao. Để trống hoặc nhập 0 nếu muốn xã tự nhập số lượng.</p>
                 </div>
             )}
 
             <div className="flex justify-end mt-4">
                 <Button onClick={handleSave} size="sm">
-                    <Save className="mr-2 h-4 w-4"/>
+                    <Save className="mr-2 h-4 w-4" />
                     Lưu Cấu hình Tiêu chí 1
                 </Button>
             </div>

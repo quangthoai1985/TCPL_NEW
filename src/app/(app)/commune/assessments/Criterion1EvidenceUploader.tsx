@@ -11,7 +11,8 @@ import { UploadCloud, Loader2, X, Eye, CheckCircle, XCircle } from 'lucide-react
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import type { FileWithStatus } from './types';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+// Firebase ref removed. Using DataContext uploadFile.
+
 
 const Criterion1EvidenceUploader = ({
     indicatorId,
@@ -24,64 +25,105 @@ const Criterion1EvidenceUploader = ({
     communeId,
     accept,
     onAddLink,
+    issueDate,
+    issuanceDeadlineDays,
 }: {
     indicatorId: string;
     docIndex: number;
     evidence: FileWithStatus[];
     onUploadComplete: (indicatorId: string, docIndex: number, newFile: { name: string, url: string }) => void;
     onRemove: (docIndex: number, fileToRemove: FileWithStatus) => void;
-    onPreview: (file: { name: string; url: string; }) => void;
+    onPreview: (file: { name: string; url: string; previewUrl?: string }) => void;
     periodId: string;
     communeId: string;
     accept?: string;
     onAddLink: (indicatorId: string, docIndex: number, link: { name: string, url: string }) => void;
+    issueDate?: string;
+    issuanceDeadlineDays?: number;
 }) => {
-    const { storage } = useData();
+    const { uploadFile } = useData();
     const { toast, dismiss } = useToast();
     const [isUploading, setIsUploading] = useState(false);
     const [linkInput, setLinkInput] = useState('');
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !storage) return;
+        if (!file) return;
 
         setIsUploading(true);
 
         const loadingToastId = toast({
             title: 'Đang tải lên...',
-            description: `Đang xử lý tệp "${file.name}".`,
+            description: `Đang xử lý tệp "${file.name}" và kiểm tra chữ ký số...`,
         }).id;
 
         try {
-            const filePath = `hoso/${communeId}/evidence/${periodId}/${indicatorId}/${docIndex}/${file.name}`;
-            const storageRef = ref(storage, filePath);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
+            // Call uploadFile from DataContext (Server Action)
+            // It automatically handles signature verification if issueDate/deadline are provided
+            const result = await uploadFile(
+                file,
+                communeId,
+                periodId,
+                indicatorId,
+                issueDate || '',
+                issuanceDeadlineDays ? String(issuanceDeadlineDays) : ''
+            );
 
-            onUploadComplete(indicatorId, docIndex, { name: file.name, url: downloadURL });
+            console.log("Upload Result:", result);
+
+            // Construct full file object with status
+            const newFileStr: any = {
+                name: file.name,
+                url: result.url,
+                signatureStatus: result.signatureStatus,
+                signatureError: result.signatureError,
+                previewUrl: result.previewUrl // Save preview URL if available
+            };
+
+            onUploadComplete(indicatorId, docIndex, newFileStr);
 
             dismiss(loadingToastId);
 
             toast({
-                title: 'Tải lên thành công!',
-                description: `Tệp "${file.name}" đã được tải lên và đang được kiểm tra.`,
-                variant: 'default',
+                title: 'Tải lên hoàn tất!',
+                description: (
+                    <>
+                        <p>{
+                            result.signatureStatus === 'valid'
+                                ? `Tệp "${file.name}" hợp lệ.`
+                                : result.signatureStatus === 'invalid'
+                                    ? `Cảnh báo: Tệp không hợp lệ (${result.signatureError})`
+                                    : `Tệp đã tải lên thành công.`
+                        }</p>
+                        {result.previewError && (
+                            <p className="mt-1 text-red-500 font-semibold text-xs">
+                                Lỗi xem trước: {result.previewError}
+                            </p>
+                        )}
+                        {result.previewUrl && (
+                            <p className="mt-1 text-green-600 font-semibold text-xs">
+                                Đã tạo bản xem trước PDF!
+                            </p>
+                        )}
+                    </>
+                ),
+                variant: result.signatureStatus === 'invalid' || result.signatureStatus === 'error' ? 'destructive' : 'default',
                 duration: 5000,
             });
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Upload error for criterion 1:", error);
-
             dismiss(loadingToastId);
-
             toast({
                 title: 'Lỗi tải lên',
-                description: `Đã xảy ra lỗi khi tải tệp "${file.name}".`,
+                description: error.message || `Đã xảy ra lỗi khi tải tệp "${file.name}".`,
                 variant: 'destructive',
                 duration: 5000,
             });
         } finally {
             setIsUploading(false);
+            // Reset input
+            e.target.value = '';
         }
     };
 
@@ -171,7 +213,7 @@ const Criterion1EvidenceUploader = ({
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
                             {'url' in file && file.url && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onPreview(file as { name: string, url: string })}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onPreview({ name: file.name, url: file.url || '', previewUrl: (file as any).previewUrl })}>
                                     <Eye className="h-4 w-4" />
                                 </Button>
                             )}

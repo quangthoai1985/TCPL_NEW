@@ -33,16 +33,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import PageHeader from '@/components/layout/page-header';
 import { useData } from '@/context/DataContext';
-import type { Criterion, Indicator, Content } from '@/lib/data';
+import type { Criterion, Indicator } from '@/lib/data';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import Criterion1Config from './Criterion1Config';
 import CT4Content1Config from './CT4Content1Config';
-import { doc, setDoc } from 'firebase/firestore';
+// Firebase removed
 import { cn } from '@/lib/utils';
 import TemplateFileUploader from './TemplateFileUploader';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 
 function CriterionForm({ criterion, onSave, onCancel }: { criterion: Partial<Criterion>, onSave: (criterion: Partial<Criterion>) => void, onCancel: () => void }) {
@@ -160,7 +158,7 @@ function IndicatorForm({ indicator, onSave, onCancel }: { indicator: Partial<Ind
 
 
 export default function CriteriaManagementPage() {
-  const { criteria, updateCriteria, db, setCriteria } = useData();
+  const { criteria, updateCriterion, db, setCriteria } = useData();
   const [editingCriterion, setEditingCriterion] = React.useState<Partial<Criterion> | null>(null);
   const [addingCriterion, setAddingCriterion] = React.useState<boolean>(false);
   const [editingIndicator, setEditingIndicator] = React.useState<{ criterionId: string, indicator: Partial<Indicator> } | null>(null);
@@ -178,57 +176,50 @@ export default function CriteriaManagementPage() {
   }
 
   const handleSaveCriterion = async (criterionToSave: Partial<Criterion>) => {
-    if (!db) {
-      toast({ variant: "destructive", title: "Lỗi!", description: "Không thể kết nối tới cơ sở dữ liệu." });
-      return;
+    let finalCriterion = { ...criterionToSave } as Criterion;
+
+    // Ensure ID exists
+    if (!finalCriterion.id) {
+      finalCriterion.id = `TC${Date.now().toString().slice(-6)}`;
+      finalCriterion.indicators = [];
     }
 
-    const docRef = doc(db, 'criteria', criterionToSave.id!);
-    const dataToSave = { ...criterionToSave };
-    delete (dataToSave as any).indicators; // Ensure indicators array is not written to the main doc
+    // Call updateCriterion from context (which calls server action)
+    // Note: updateCriterion in DataContext handles optimistic update + server call
+    await updateCriterion(finalCriterion); // Using updateCriteria alias or updateCriterion? useData returns updateCriteria alias?
+    // In DataContext I see: updateCriterion (singular) AND updateCriteria: stubAsync. I should probably use updateCriterion.
+    // Wait, DataContext.tsx exported 'updateCriteria' as alias but it was stubAsync. I should check if I implemented it.
+    // In step 160: updateCriterion IS IMPLEMENTED. updateCriteria IS stubAsync.
+    // BUT the component uses `const { criteria, updateCriteria, db, setCriteria } = useData();` on line 164.
+    // So it calls `updateCriteria` which is a STUB.
+    // I MUST Change usage to `updateCriterion` or map `updateCriteria` in DataContext.
+    // I will change usage to `updateCriterion` here.
 
+    // Actually I can't change the destructuring easily without changing line 164.
+    // I will assume I will fix line 164 in next chunk.
+
+    // Logic:
+    // 1. Construct full object.
+    // 2. Call update.
+
+    // If it's a new criterion, we need to make sure we don't pass incomplete data.
+    if (!finalCriterion.name) finalCriterion.name = "Tiêu chí mới";
+
+    // We need to keep existing indicators if editing only properties
     if (criterionToSave.id) {
-      setDoc(docRef, dataToSave, { merge: true })
-        .then(() => {
-          setCriteria(prev => prev.map(c => c.id === criterionToSave.id ? { ...c, ...dataToSave } : c));
-          toast({
-            title: "Thành công!",
-            description: `Đã lưu cấu hình ${criterionToSave.name || 'Tiêu chí'}.`
-          });
-        })
-        .catch((error) => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: docRef.path,
-            operation: 'update',
-            requestResourceData: dataToSave,
-          }));
-          console.error("Lỗi lưu criterion:", error);
-        });
-    } else {
-      const newId = `TC${Date.now().toString().slice(-6)}`;
-      const newCriterion: Criterion = {
-        id: newId,
-        name: criterionToSave.name || "Tiêu chí mới",
-        description: criterionToSave.description || "",
-        indicators: []
-      };
-      const newDocRef = doc(db, 'criteria', newId);
-      const { indicators, ...newDocData } = newCriterion;
-
-      setDoc(newDocRef, newDocData)
-        .then(() => {
-          setCriteria(prev => [...prev, newCriterion]);
-          toast({ title: "Thành công!", description: "Đã thêm tiêu chí mới." });
-        })
-        .catch((error) => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: newDocRef.path,
-            operation: 'create',
-            requestResourceData: newDocData,
-          }));
-          console.error("Lỗi tạo criterion:", error);
-        });
+      const existing = criteria.find(c => c.id === criterionToSave.id);
+      if (existing) {
+        finalCriterion = { ...existing, ...criterionToSave };
+      }
     }
+
+    try {
+      await updateCriterion(finalCriterion);
+      toast({ title: "Thành công!", description: "Đã lưu tiêu chí." });
+    } catch (e) {
+      toast({ variant: 'destructive', title: "Lỗi", description: "Không thể lưu tiêu chí" });
+    }
+
     handleCancelEditCriterion();
   };
 
@@ -237,16 +228,14 @@ export default function CriteriaManagementPage() {
   const handleCancelEditIndicator = () => { setEditingIndicator(null); setAddingIndicatorTo(null); };
 
   const handleSaveIndicator = async (indicatorToSave: Partial<Indicator>) => {
-    if (!db) {
-      toast({ variant: "destructive", title: "Lỗi!", description: "Không thể kết nối tới cơ sở dữ liệu." });
-      return;
-    }
-
     const parentCriterionId = editingIndicator?.criterionId || addingIndicatorTo;
     if (!parentCriterionId) {
       toast({ variant: "destructive", title: "Lỗi!", description: "Không xác định được tiêu chí cha." });
       return;
     }
+
+    const parentCriterion = criteria.find(c => c.id === parentCriterionId);
+    if (!parentCriterion) return;
 
     let finalIndicator: Indicator;
     const isEditing = !!editingIndicator?.indicator?.id;
@@ -258,8 +247,7 @@ export default function CriteriaManagementPage() {
         templateFiles: indicatorToSave.templateFiles || [],
       } as Indicator;
     } else { // Adding new indicator
-      const parentCriterion = criteria.find(c => c.id === parentCriterionId);
-      const order = parentCriterion ? (parentCriterion.indicators?.length || 0) + 1 : 1;
+      const order = (parentCriterion.indicators?.length || 0) + 1;
       finalIndicator = {
         id: `CT${Date.now().toString().slice(-6)}`,
         name: indicatorToSave.name || "Chỉ tiêu mới",
@@ -269,41 +257,28 @@ export default function CriteriaManagementPage() {
         evidenceRequirement: indicatorToSave.evidenceRequirement || "",
         templateFiles: indicatorToSave.templateFiles || [],
         order: order,
+        originalParentIndicatorId: undefined // Default, set explicitly if nested logic exists (but here we don't have nested creation UI yet)
       } as Indicator;
     }
 
-    const indicatorRef = doc(db, 'criteria', parentCriterionId, 'indicators', finalIndicator.id);
+    // Construct new indicators list
+    let newIndicators = [...(parentCriterion.indicators || [])];
+    if (isEditing) {
+      const idx = newIndicators.findIndex(i => i.id === finalIndicator.id);
+      if (idx !== -1) newIndicators[idx] = finalIndicator;
+    } else {
+      newIndicators.push(finalIndicator);
+    }
 
-    setDoc(indicatorRef, finalIndicator, { merge: true })
-      .then(() => {
-        setCriteria(prevCriteria => prevCriteria.map(c => {
-          if (c.id === parentCriterionId) {
-            const existingIndicatorIndex = c.indicators.findIndex(i => i.id === finalIndicator.id);
-            let newIndicators;
-            if (existingIndicatorIndex > -1) {
-              newIndicators = [...c.indicators];
-              newIndicators[existingIndicatorIndex] = finalIndicator;
-            } else {
-              newIndicators = [...c.indicators, finalIndicator];
-            }
-            return { ...c, indicators: newIndicators };
-          }
-          return c;
-        }));
+    // Update the parent criterion
+    const updatedCriterion = { ...parentCriterion, indicators: newIndicators };
 
-        toast({
-          title: "Thành công!",
-          description: `Đã ${isEditing ? 'cập nhật' : 'thêm'} chỉ tiêu.`
-        });
-      })
-      .catch((error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: indicatorRef.path,
-          operation: isEditing ? 'update' : 'create',
-          requestResourceData: finalIndicator,
-        }));
-        console.error("Lỗi khi lưu chỉ tiêu:", error);
-      });
+    try {
+      await updateCriterion(updatedCriterion);
+      toast({ title: "Thành công!", description: `Đã ${isEditing ? 'cập nhật' : 'thêm'} chỉ tiêu.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Lỗi khi lưu chỉ tiêu." });
+    }
 
     handleCancelEditIndicator();
   };
@@ -418,7 +393,7 @@ export default function CriteriaManagementPage() {
                       />
                     )}
                     {/* Lọc và render các chỉ tiêu gốc (không có cha) */}
-                    {(criterion.indicators ?? []).filter(ind => !ind.originalParentIndicatorId).map((indicator) => (
+                    {(criterion.indicators ?? []).filter((ind: Indicator) => !ind.originalParentIndicatorId).map((indicator: Indicator) => (
                       renderIndicatorNode(criterion, indicator)
                     ))}
                   </div>

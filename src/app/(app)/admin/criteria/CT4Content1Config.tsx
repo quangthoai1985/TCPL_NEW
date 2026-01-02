@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Save } from 'lucide-react';
 
 function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave: (criterion: Partial<Criterion>) => void }) {
-    
+
     const [formData, setFormData] = React.useState<{
         assignmentType: 'quantity' | 'specific';
         assignedDocumentsCount?: number;
@@ -50,7 +50,7 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
             };
         });
     };
-    
+
     const handleDocumentChange = (index: number, field: 'name' | 'issueDate' | 'excerpt' | 'issuanceDeadlineDays', value: string | number) => {
         setFormData(prev => {
             const newDocuments = [...(prev.documents || [])];
@@ -60,12 +60,10 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
             return { ...prev, documents: newDocuments };
         });
     };
-    
-    const handleSave = () => {
-        const { indicators, ...criterionWithoutIndicators } = criterion;
 
+    const handleSave = () => {
         const updatedCriterion: Partial<Criterion> = {
-            ...criterionWithoutIndicators,
+            ...criterion,
             assignmentType: formData.assignmentType,
             assignedDocumentsCount: formData.assignedDocumentsCount || 0,
         };
@@ -83,7 +81,7 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
     const handleTypeChange = (value: 'quantity' | 'specific') => {
         setFormData(prev => {
             const newFormData = { ...prev, assignmentType: value };
-    
+
             if (value === 'specific') {
                 const count = prev.assignedDocumentsCount || 0;
                 const currentDocuments = prev.documents || [];
@@ -91,9 +89,9 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
                     return currentDocuments[i] || { name: '', issueDate: '', excerpt: '', issuanceDeadlineDays: 7 };
                 });
             } else {
-                newFormData.documents = []; 
+                newFormData.documents = [];
             }
-            
+
             return newFormData;
         });
     };
@@ -101,9 +99,9 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
 
     return (
         <div className="space-y-6">
-            
-            <RadioGroup 
-                value={formData.assignmentType || 'specific'} 
+
+            <RadioGroup
+                value={formData.assignmentType || 'specific'}
                 onValueChange={handleTypeChange}
                 className="my-4 grid grid-cols-1 md:grid-cols-2 gap-4"
             >
@@ -122,10 +120,10 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
                 <>
                     <div className="grid gap-2">
                         <Label htmlFor="assignedDocumentsCount-ct4">Số lượng Kế hoạch được giao</Label>
-                        <Input id="assignedDocumentsCount-ct4" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Ví dụ: 1" className="w-48"/>
+                        <Input id="assignedDocumentsCount-ct4" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Ví dụ: 1" className="w-48" />
                         <p className="text-sm text-muted-foreground">Nhập số lượng Kế hoạch PBGDPL để hệ thống tạo ra các trường tương ứng bên dưới.</p>
                     </div>
-                    
+
                     {(formData.documents || []).length > 0 && (
                         <div className="space-y-4 pt-4 border-t">
                             <h5 className="font-medium">Chi tiết các Kế hoạch được giao</h5>
@@ -165,14 +163,14 @@ function CT4Content1Config({ criterion, onSave }: { criterion: Criterion, onSave
             {formData.assignmentType === 'quantity' && (
                 <div className="grid gap-2">
                     <Label htmlFor="assignedDocumentsCountQty-ct4">Số lượng Kế hoạch được giao ban hành trong năm</Label>
-                    <Input id="assignedDocumentsCountQty-ct4" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Để trống hoặc nhập 0 để xã tự điền" className="w-64"/>
+                    <Input id="assignedDocumentsCountQty-ct4" type="number" value={formData.assignedDocumentsCount ?? ''} onChange={handleCountChange} placeholder="Để trống hoặc nhập 0 để xã tự điền" className="w-64" />
                     <p className="text-sm text-muted-foreground">Nhập số lượng Kế hoạch được giao. Để trống hoặc nhập 0 nếu muốn xã tự nhập số lượng.</p>
                 </div>
             )}
 
             <div className="flex justify-end mt-4">
                 <Button onClick={handleSave} size="sm">
-                    <Save className="mr-2 h-4 w-4"/>
+                    <Save className="mr-2 h-4 w-4" />
                     Lưu Cấu hình
                 </Button>
             </div>

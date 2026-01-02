@@ -53,7 +53,7 @@ export default function RegistrationManagementPage() {
     units,
     assessmentPeriods,
     assessments,
-    updateAssessments,
+    updateAssessment,
   } = useData();
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -63,11 +63,11 @@ export default function RegistrationManagementPage() {
   const [selectedPeriodId, setSelectedPeriodId] = React.useState<string | undefined>(
     assessmentPeriods.find((p) => p.isActive)?.id
   );
-  
-  const [actionTarget, setActionTarget] = useState<{assessment: Assessment, type: 'reject' | 'return'} | null>(null);
+
+  const [actionTarget, setActionTarget] = useState<{ assessment: Assessment, type: 'reject' | 'return' } | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null);
-  
+
   const initialTab = searchParams.get('tab') || 'pending';
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -99,31 +99,29 @@ export default function RegistrationManagementPage() {
   ) => {
     const assessmentToUpdate = assessments.find(a => a.id === assessmentId);
     if (!assessmentToUpdate) return;
-    
-    const updatedAssessment: Assessment = { 
-      ...assessmentToUpdate, 
+
+    const updatedAssessment: Assessment = {
+      ...assessmentToUpdate,
       registrationStatus: newStatus,
       registrationRejectionReason: newStatus === 'rejected' ? reason : '',
       // When admin approves registration, set the assessment status to 'not_started'
       assessmentStatus: newStatus === 'approved' ? 'not_started' : assessmentToUpdate.assessmentStatus,
     };
-    
-    await updateAssessments(
-      assessments.map((a) => (a.id === assessmentId ? updatedAssessment : a))
-    );
+
+    await updateAssessment(updatedAssessment);
 
     let actionText = '';
     if (newStatus === 'approved') actionText = 'phê duyệt';
     else if (newStatus === 'rejected') actionText = 'từ chối';
     else if (newStatus === 'pending') actionText = 'hoàn tác về chờ duyệt';
-    
+
 
     toast({
       title: 'Cập nhật thành công',
       description: `Đã ${actionText} đăng ký của ${getUnitInfo(updatedAssessment.communeId).name}.`,
     });
-    
-    if(actionTarget) {
+
+    if (actionTarget) {
       setActionTarget(null);
       setRejectionReason('');
     }
@@ -194,16 +192,16 @@ export default function RegistrationManagementPage() {
               const responsibleUser = users.find(u => u.communeId === communeId);
 
               let statusInfo;
-              if(type === 'unregistered') {
-                  statusInfo = { text: 'Chưa đăng ký', icon: FileX, className: 'bg-gray-400' };
+              if (type === 'unregistered') {
+                statusInfo = { text: 'Chưa đăng ký', icon: FileX, className: 'bg-gray-400' };
               } else {
-                  const assessment = item as Assessment;
-                   const statusMap = {
-                    pending: { text: 'Chờ duyệt', icon: Clock, className: 'bg-amber-500' },
-                    approved: { text: 'Đã duyệt', icon: CheckCircle, className: 'bg-green-500' },
-                    rejected: { text: 'Bị từ chối', icon: XCircle, className: 'bg-red-500' },
-                  };
-                  statusInfo = statusMap[assessment.registrationStatus as keyof typeof statusMap];
+                const assessment = item as Assessment;
+                const statusMap = {
+                  pending: { text: 'Chờ duyệt', icon: Clock, className: 'bg-amber-500' },
+                  approved: { text: 'Đã duyệt', icon: CheckCircle, className: 'bg-green-500' },
+                  rejected: { text: 'Bị từ chối', icon: XCircle, className: 'bg-red-500' },
+                };
+                statusInfo = statusMap[assessment.registrationStatus as keyof typeof statusMap];
               }
 
               return (
@@ -213,48 +211,48 @@ export default function RegistrationManagementPage() {
                   <TableCell>{responsibleUser?.phoneNumber || 'N/A'}</TableCell>
                   <TableCell>
                     {statusInfo && (
-                       <Badge className={`${statusInfo.className} text-white`}>
+                      <Badge className={`${statusInfo.className} text-white`}>
                         <statusInfo.icon className="mr-2 h-4 w-4" />
                         {statusInfo.text}
-                       </Badge>
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                     {isAssessment && (item as Assessment).registrationFormUrl && (
-                       <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPreviewFile({ name: `Đơn của ${unitInfo.name}`, url: (item as Assessment).registrationFormUrl! })}
-                        >
-                          <Eye className="mr-2 h-4 w-4" /> Xem đơn
-                        </Button>
+                    {isAssessment && (item as Assessment).registrationFormUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPreviewFile({ name: `Đơn của ${unitInfo.name}`, url: (item as Assessment).registrationFormUrl! })}
+                      >
+                        <Eye className="mr-2 h-4 w-4" /> Xem đơn
+                      </Button>
                     )}
                     {type === 'pending' && isAssessment && (
                       <>
                         <Button
                           size="sm"
                           className="bg-red-600 hover:bg-red-700"
-                          onClick={() => setActionTarget({ assessment: item as Assessment, type: 'reject'})}
+                          onClick={() => setActionTarget({ assessment: item as Assessment, type: 'reject' })}
                         >
                           <ThumbsDown className="mr-2 h-4 w-4" /> Từ chối
                         </Button>
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700"
-                           onClick={() => handleUpdateStatus(item.id, 'approved')}
+                          onClick={() => handleUpdateStatus(item.id, 'approved')}
                         >
                           <ThumbsUp className="mr-2 h-4 w-4" /> Phê duyệt
                         </Button>
                       </>
                     )}
                     {type === 'approved' && isAssessment && (
-                       <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleUpdateStatus(item.id, 'pending')}
-                        >
-                          <Undo2 className="mr-2 h-4 w-4" /> Hoàn tác
-                        </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleUpdateStatus(item.id, 'pending')}
+                      >
+                        <Undo2 className="mr-2 h-4 w-4" /> Hoàn tác
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>
@@ -320,7 +318,7 @@ export default function RegistrationManagementPage() {
           </Tabs>
         </CardContent>
       </Card>
-      
+
       <Dialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -331,7 +329,7 @@ export default function RegistrationManagementPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <Label htmlFor="rejectionReason">Lý do</Label>
-            <Textarea 
+            <Textarea
               id="rejectionReason"
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
@@ -340,8 +338,8 @@ export default function RegistrationManagementPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setActionTarget(null)}>Hủy</Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               disabled={!rejectionReason.trim()}
               onClick={() => handleUpdateStatus(actionTarget!.assessment.id, 'rejected', rejectionReason)}
             >
@@ -353,30 +351,30 @@ export default function RegistrationManagementPage() {
 
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
-            <DialogHeader className="p-6 pb-0">
-                <DialogTitle>Xem trước: {previewFile?.name}</DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 px-6 pb-6 h-full">
-                {previewFile && (
-                   <iframe 
-                        src={`https://docs.google.com/gview?url=${encodeURIComponent(previewFile.url)}&embedded=true`} 
-                        className="w-full h-full border rounded-md" 
-                        title={previewFile.name}
-                    ></iframe>
-                )}
-            </div>
-            <DialogFooter className="p-6 pt-0 border-t">
-                 <Button variant="secondary" asChild>
-                    <a href={previewFile?.url} target="_blank" rel="noopener noreferrer">
-                        <Download className="mr-2 h-4 w-4"/> Tải xuống
-                    </a>
-                 </Button>
-                <Button variant="outline" onClick={() => setPreviewFile(null)}>Đóng</Button>
-            </DialogFooter>
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle>Xem trước: {previewFile?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 px-6 pb-6 h-full">
+            {previewFile && (
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(previewFile.url)}&embedded=true`}
+                className="w-full h-full border rounded-md"
+                title={previewFile.name}
+              ></iframe>
+            )}
+          </div>
+          <DialogFooter className="p-6 pt-0 border-t">
+            <Button variant="secondary" asChild>
+              <a href={previewFile?.url} target="_blank" rel="noopener noreferrer">
+                <Download className="mr-2 h-4 w-4" /> Tải xuống
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => setPreviewFile(null)}>Đóng</Button>
+          </DialogFooter>
         </DialogContent>
-    </Dialog>
+      </Dialog>
     </>
   );
 }
 
-    
+

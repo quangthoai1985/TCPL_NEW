@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { CheckCircle, ListChecks, Settings2 } from "lucide-react";
+import { CheckCircle, ListChecks, Settings2, CheckCircle2, XCircle, BarChart3, FileCheck, Clock } from "lucide-react";
 import type { Criterion } from "@/lib/data";
 import StatusBadge from "./StatusBadge";
 import type { AssessmentValues, FileWithStatus, AssessmentStatus } from "./types";
@@ -51,6 +51,47 @@ const Criterion1Component = ({
     const isNotTasked = assessmentData[firstIndicatorId]?.isTasked === false;
     const assignmentType = criterion.assignmentType || 'specific';
 
+    // --- TÍNH TOÁN THỐNG KÊ CHỈ TIÊU ---
+    const stats = useMemo(() => {
+        // CHỈ TIÊU LỚN: Các chỉ tiêu gốc (không có originalParentIndicatorId)
+        const mainIndicators = criterion.indicators.filter(i => !i.originalParentIndicatorId);
+        const mainIndicatorsCount = mainIndicators.length;
+
+        // CHỈ TIÊU CÓ THỂ CHẤM: Tất cả chỉ tiêu KHÔNG phải group_header
+        const scoreableIndicators = criterion.indicators.filter(i =>
+            i.inputType !== 'group_header'
+        );
+        const scoreableCount = scoreableIndicators.length;
+
+        let achievedCount = 0;
+        let notAchievedCount = 0;
+        let pendingCount = 0;
+
+        for (const indicator of scoreableIndicators) {
+            const status = assessmentData[indicator.id]?.status;
+            if (status === 'achieved') {
+                achievedCount++;
+            } else if (status === 'not-achieved') {
+                notAchievedCount++;
+            } else {
+                pendingCount++;
+            }
+        }
+
+        const scoredCount = achievedCount + notAchievedCount;
+        const progressPercentage = scoreableCount > 0 ? Math.round((scoredCount / scoreableCount) * 100) : 0;
+
+        return {
+            mainIndicatorsCount,  // Số chỉ tiêu lớn
+            scoreableCount,       // Số chỉ tiêu có thể chấm
+            scoredCount,          // Số đã chấm
+            pendingCount,         // Số chưa chấm
+            achievedCount,        // Số đạt
+            notAchievedCount,     // Số không đạt
+            progressPercentage    // Phần trăm tiến độ
+        };
+    }, [criterion.indicators, assessmentData]);
+
     // --- BẮT ĐẦU LOGIC MỚI CHO docsToRender ---
     const docsToRender = useMemo(() => {
         const firstIndicatorData = assessmentData[firstIndicatorId];
@@ -89,24 +130,103 @@ const Criterion1Component = ({
     };
 
     const triggerClasses = cn(
-        "px-6 py-5 hover:no-underline data-[state=open]:border-b",
-        criterionStatus === 'achieved' ? 'bg-green-100/80 hover:bg-green-100' :
-            criterionStatus === 'not-achieved' ? 'bg-red-100/80 hover:bg-red-100' :
-                'bg-amber-100/80 hover:bg-amber-100'
+        "px-6 py-5 hover:no-underline data-[state=open]:border-b transition-all",
+        criterionStatus === 'achieved'
+            ? 'bg-gradient-to-r from-green-100/90 to-green-50/50 hover:from-green-100 hover:to-green-100/70'
+            : criterionStatus === 'not-achieved'
+                ? 'bg-gradient-to-r from-red-100/90 to-red-50/50 hover:from-red-100 hover:to-red-100/70'
+                : 'bg-gradient-to-r from-amber-100/90 to-amber-50/50 hover:from-amber-100 hover:to-amber-100/70'
     );
 
 
     return (
         <AccordionItem value={criterion.id} key={criterion.id} className="border-0">
             <AccordionTrigger className={triggerClasses}>
-                <div className="flex items-center gap-4 flex-1 text-left">
-                    <div className="flex-shrink-0">
-                        <StatusBadge status={criterionStatus} isCriterion={true} />
+                <div className="flex flex-col gap-4 flex-1 text-left w-full">
+                    {/* Header Row */}
+                    <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                            <StatusBadge status={criterionStatus} isCriterion={true} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-lg font-bold text-foreground">
+                                Tiêu chí 1: {criterion.name.replace(`Tiêu chí 1: `, '')}
+                            </h3>
+                        </div>
                     </div>
-                    <div className="flex-1">
-                        <h3 className="text-lg font-bold text-foreground">
-                            Tiêu chí 1: {criterion.name.replace(`Tiêu chí 1: `, '')}
-                        </h3>
+
+                    {/* Statistics Grid */}
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+                        {/* Chỉ tiêu lớn */}
+                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-slate-200/50">
+                            <div className="p-1.5 rounded-md bg-indigo-100">
+                                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-medium">Chỉ tiêu lớn</span>
+                                <span className="text-sm font-bold text-slate-700">{stats.mainIndicatorsCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Có thể chấm */}
+                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-blue-200/50">
+                            <div className="p-1.5 rounded-md bg-blue-100">
+                                <FileCheck className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-medium">Có thể chấm</span>
+                                <span className="text-sm font-bold text-blue-600">{stats.scoreableCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Đã chấm */}
+                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-purple-200/50">
+                            <div className="p-1.5 rounded-md bg-purple-100">
+                                <Clock className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-medium">Đã chấm</span>
+                                <span className="text-sm font-bold text-purple-600">{stats.scoredCount}/{stats.scoreableCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Đạt */}
+                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-green-200/50">
+                            <div className="p-1.5 rounded-md bg-green-100">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-medium">Đạt</span>
+                                <span className="text-sm font-bold text-green-600">{stats.achievedCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Không đạt */}
+                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-red-200/50">
+                            <div className="p-1.5 rounded-md bg-red-100">
+                                <XCircle className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-500 font-medium">Không đạt</span>
+                                <span className="text-sm font-bold text-red-600">{stats.notAchievedCount}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mt-3 space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                            <span className="text-slate-500 font-medium">Tiến độ hoàn thành</span>
+                            <span className={`font-semibold ${stats.progressPercentage >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                                {stats.progressPercentage}%
+                            </span>
+                        </div>
+                        <div className="h-2 bg-slate-200/70 rounded-full overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-500 ${stats.progressPercentage >= 100 ? 'bg-gradient-to-r from-green-400 to-green-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`}
+                                style={{ width: `${stats.progressPercentage}%` }}
+                            />
+                        </div>
                     </div>
                 </div>
             </AccordionTrigger>

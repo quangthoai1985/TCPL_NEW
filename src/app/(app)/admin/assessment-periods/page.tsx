@@ -84,191 +84,184 @@ function PeriodForm({ period, onSave, onCancel }: { period: Partial<AssessmentPe
 
 
 export default function AssessmentPeriodPage() {
-    const { assessmentPeriods, updateAssessmentPeriods } = useData();
-    const [isFormOpen, setIsFormOpen] = React.useState(false);
-    const [editingPeriod, setEditingPeriod] = React.useState<Partial<AssessmentPeriod> | null>(null);
-    const [deletingPeriod, setDeletingPeriod] = React.useState<AssessmentPeriod | null>(null);
-    const { toast } = useToast();
+  const { assessmentPeriods, updateAssessmentPeriod, deleteAssessmentPeriod } = useData();
+  const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [editingPeriod, setEditingPeriod] = React.useState<Partial<AssessmentPeriod> | null>(null);
+  const [deletingPeriod, setDeletingPeriod] = React.useState<AssessmentPeriod | null>(null);
+  const { toast } = useToast();
 
-    const handleNew = () => {
-        setEditingPeriod({});
-        setIsFormOpen(true);
+  const handleNew = () => {
+    setEditingPeriod({});
+    setIsFormOpen(true);
+  }
+
+  const handleEdit = (period: AssessmentPeriod) => {
+    setEditingPeriod(period);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = (period: AssessmentPeriod) => {
+    setDeletingPeriod(period);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingPeriod) return;
+    await deleteAssessmentPeriod(deletingPeriod.id);
+    toast({
+      title: "Đã xóa đợt đánh giá",
+      description: `Đợt "${deletingPeriod.name}" đã được xóa.`,
+      variant: "destructive",
+    });
+    setDeletingPeriod(null);
+  };
+
+  const handleSave = async (periodToSave: Partial<AssessmentPeriod>) => {
+    if (periodToSave.id) {
+      const updatedPeriod = assessmentPeriods.find(p => p.id === periodToSave.id);
+      if (updatedPeriod) {
+        await updateAssessmentPeriod({ ...updatedPeriod, ...periodToSave });
+        toast({ title: "Thành công!", description: "Đã cập nhật thông tin đợt đánh giá." });
+      }
+    } else {
+      const newPeriod = {
+        id: `DOT${String(Date.now()).slice(-6)}`,
+        name: periodToSave.name || '',
+        startDate: periodToSave.startDate || '',
+        endDate: periodToSave.endDate || '',
+        isActive: false,
+        registrationDeadline: periodToSave.registrationDeadline || '',
+      } as AssessmentPeriod;
+      await updateAssessmentPeriod(newPeriod);
+      toast({ title: "Thành công!", description: "Đã tạo đợt đánh giá mới." });
     }
-    
-    const handleEdit = (period: AssessmentPeriod) => {
-        setEditingPeriod(period);
-        setIsFormOpen(true);
-    };
+    setIsFormOpen(false);
+    setEditingPeriod(null);
+  }
 
-    const handleDelete = (period: AssessmentPeriod) => {
-        setDeletingPeriod(period);
-    };
+  const handleCancel = () => {
+    setIsFormOpen(false);
+    setEditingPeriod(null);
+  }
 
-    const confirmDelete = async () => {
-        if (!deletingPeriod) return;
-        // This currently only removes the period from the list.
-        // A Cloud Function would be needed to clean up related assessments and files.
-        await updateAssessmentPeriods(assessmentPeriods.filter(p => p.id !== deletingPeriod.id));
-        toast({
-            title: "Đã xóa đợt đánh giá",
-            description: `Đợt "${deletingPeriod.name}" đã được xóa. Lưu ý: các hồ sơ liên quan chưa được dọn dẹp.`,
-            variant: "destructive",
-        });
-        setDeletingPeriod(null);
-    };
+  const handleStatusToggle = async (periodId: string) => {
+    const period = assessmentPeriods.find(p => p.id === periodId);
+    if (!period) return;
 
-    const handleSave = async (periodToSave: Partial<AssessmentPeriod>) => {
-        if (periodToSave.id) {
-            await updateAssessmentPeriods(assessmentPeriods.map(p => p.id === periodToSave.id ? { ...p, ...periodToSave } as AssessmentPeriod : p));
-            toast({ title: "Thành công!", description: "Đã cập nhật thông tin đợt đánh giá."});
-        } else {
-            const newPeriod = {
-                id: `DOT${String(Date.now()).slice(-6)}`,
-                name: periodToSave.name || '',
-                startDate: periodToSave.startDate || '',
-                endDate: periodToSave.endDate || '',
-                isActive: false,
-                registrationDeadline: periodToSave.registrationDeadline || '',
-            } as AssessmentPeriod;
-            await updateAssessmentPeriods([...assessmentPeriods, newPeriod]);
-            toast({ title: "Thành công!", description: "Đã tạo đợt đánh giá mới."});
-        }
-        setIsFormOpen(false);
-        setEditingPeriod(null);
-    }
+    const newStatus = !period.isActive;
+    await updateAssessmentPeriod({ ...period, isActive: newStatus });
 
-    const handleCancel = () => {
-        setIsFormOpen(false);
-        setEditingPeriod(null);
-    }
-    
-    const handleStatusToggle = async (periodId: string) => {
-        // Find the current status to decide the new status
-        const isCurrentlyActive = assessmentPeriods.find(p => p.id === periodId)?.isActive;
-        const newStatus = !isCurrentlyActive;
-
-        // If we are activating a period, all others must be deactivated.
-        // If we are deactivating a period, its status just becomes false.
-        const updatedPeriods = assessmentPeriods.map(p => ({
-            ...p,
-            isActive: p.id === periodId ? newStatus : false
-        }));
-
-        await updateAssessmentPeriods(updatedPeriods);
-        
-        const activePeriod = updatedPeriods.find(p => p.id === periodId);
-        toast({
-            title: "Cập nhật thành công",
-            description: `Đã ${activePeriod?.isActive ? 'kích hoạt' : 'vô hiệu hóa'} đợt đánh giá.`
-        });
-    }
+    toast({
+      title: "Cập nhật thành công",
+      description: `Đã ${newStatus ? 'kích hoạt' : 'vô hiệu hóa'} đợt đánh giá.`
+    });
+  }
 
   return (
     <>
-    <PageHeader title="Quản lý Đợt đánh giá" description="Tạo và quản lý các kỳ đánh giá trong năm. Chỉ một đợt được hoạt động tại một thời điểm."/>
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-end">
-             <Button onClick={handleNew}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Thêm Đợt đánh giá
+      <PageHeader title="Quản lý Đợt đánh giá" description="Tạo và quản lý các kỳ đánh giá trong năm. Chỉ một đợt được hoạt động tại một thời điểm." />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-end">
+            <Button onClick={handleNew}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Thêm Đợt đánh giá
             </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tên đợt đánh giá</TableHead>
-              <TableHead>Ngày bắt đầu</TableHead>
-              <TableHead>Ngày kết thúc</TableHead>
-              <TableHead>Hạn đăng ký</TableHead>
-              <TableHead>Trạng thái</TableHead>
-              <TableHead>Kích hoạt</TableHead>
-              <TableHead>
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {assessmentPeriods.map((period) => (
-              <TableRow key={period.id}>
-                <TableCell className="font-medium">{period.name}</TableCell>
-                <TableCell>{period.startDate}</TableCell>
-                <TableCell>{period.endDate}</TableCell>
-                <TableCell>{period.registrationDeadline || 'N/A'}</TableCell>
-                <TableCell>
-                    <Badge variant={period.isActive ? 'default' : 'secondary'} className={period.isActive ? 'bg-green-600' : ''}>
-                        {period.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
-                    </Badge>
-                </TableCell>
-                <TableCell>
-                    <Switch
-                        checked={period.isActive}
-                        onCheckedChange={() => handleStatusToggle(period.id)}
-                    />
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        aria-haspopup="true"
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Toggle menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Hành động</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => handleEdit(period)}>Sửa</DropdownMenuItem>
-                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleDelete(period)} className="text-destructive">
-                        Xóa
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tên đợt đánh giá</TableHead>
+                <TableHead>Ngày bắt đầu</TableHead>
+                <TableHead>Ngày kết thúc</TableHead>
+                <TableHead>Hạn đăng ký</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Kích hoạt</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Hiển thị <strong>1-{assessmentPeriods.length}</strong> trên <strong>{assessmentPeriods.length}</strong> đợt
-        </div>
-      </CardFooter>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {assessmentPeriods.map((period) => (
+                <TableRow key={period.id}>
+                  <TableCell className="font-medium">{period.name}</TableCell>
+                  <TableCell>{period.startDate}</TableCell>
+                  <TableCell>{period.endDate}</TableCell>
+                  <TableCell>{period.registrationDeadline || 'N/A'}</TableCell>
+                  <TableCell>
+                    <Badge variant={period.isActive ? 'default' : 'secondary'} className={period.isActive ? 'bg-green-600' : ''}>
+                      {period.isActive ? 'Đang hoạt động' : 'Không hoạt động'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={period.isActive}
+                      onCheckedChange={() => handleStatusToggle(period.id)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          aria-haspopup="true"
+                          size="icon"
+                          variant="ghost"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Toggle menu</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Hành động</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleEdit(period)}>Sửa</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDelete(period)} className="text-destructive">
+                          Xóa
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <CardFooter>
+          <div className="text-xs text-muted-foreground">
+            Hiển thị <strong>1-{assessmentPeriods.length}</strong> trên <strong>{assessmentPeriods.length}</strong> đợt
+          </div>
+        </CardFooter>
+      </Card>
 
-    <Dialog open={isFormOpen} onOpenChange={(open) => {
-      if (!open) {
-        handleCancel();
-      }
-    }}>
-      <DialogContent>
-        {editingPeriod && <PeriodForm period={editingPeriod} onSave={handleSave} onCancel={handleCancel} />}
-      </DialogContent>
-    </Dialog>
+      <Dialog open={isFormOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleCancel();
+        }
+      }}>
+        <DialogContent>
+          {editingPeriod && <PeriodForm period={editingPeriod} onSave={handleSave} onCancel={handleCancel} />}
+        </DialogContent>
+      </Dialog>
 
-    <AlertDialog open={!!deletingPeriod} onOpenChange={(open) => !open && setDeletingPeriod(null)}>
+      <AlertDialog open={!!deletingPeriod} onOpenChange={(open) => !open && setDeletingPeriod(null)}>
         <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Bạn có chắc chắn muốn xóa đợt đánh giá <strong>{deletingPeriod?.name}</strong>?
-                    Hành động này không thể hoàn tác và sẽ xóa đợt đánh giá khỏi danh sách.
-                    <br/><br/>
-                    <strong className="text-destructive">Cảnh báo:</strong> Thao tác này hiện tại chưa tự động xóa các hồ sơ và tệp tin liên quan.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDeletingPeriod(null)}>Hủy</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">Xác nhận Xóa</AlertDialogAction>
-            </AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa đợt đánh giá <strong>{deletingPeriod?.name}</strong>?
+              Hành động này không thể hoàn tác và sẽ xóa đợt đánh giá khỏi danh sách.
+              <br /><br />
+              <strong className="text-destructive">Cảnh báo:</strong> Thao tác này hiện tại chưa tự động xóa các hồ sơ và tệp tin liên quan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingPeriod(null)}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">Xác nhận Xóa</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
-    </AlertDialog>
+      </AlertDialog>
     </>
   );
 }

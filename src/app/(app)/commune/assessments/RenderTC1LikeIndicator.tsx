@@ -17,26 +17,13 @@ import StatusBadge from "./StatusBadge";
 import type { AssessmentValues, FileWithStatus } from "./types";
 import Criterion1EvidenceUploader from './Criterion1EvidenceUploader';
 import { useData } from '@/context/DataContext';
-import { doc, setDoc } from 'firebase/firestore';
+// FIXME: Firebase removed - needs Prisma refactoring
+// import { doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 
 // Debounce function to delay execution
-function debounce<F extends (...args: any[]) => any>(func: F, wait: number): (...args: Parameters<F>) => void {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    return function executedFunction(...args: Parameters<F>) {
-        const later = () => {
-            timeout = null;
-            func(...args);
-        };
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-        timeout = setTimeout(later, wait);
-    };
-}
+
 
 
 const RenderTC1LikeIndicator = ({
@@ -59,7 +46,7 @@ const RenderTC1LikeIndicator = ({
     onNoteChange: (id: string, note: string) => void;
     onEvidenceChange: (id: string, files: FileWithStatus[], docIndex?: number, fileToRemove?: FileWithStatus) => void,
     onIsTaskedChange: (id: string, isTasked: boolean) => void;
-    onPreview: (file: { name: string; url: string; }) => void;
+    onPreview: (file: { name: string; url: string; previewUrl?: string }) => void;
     periodId: string;
     communeId: string;
     handleCommuneDocsChange: (indicatorId: string, docs: any[]) => void;
@@ -87,44 +74,10 @@ const RenderTC1LikeIndicator = ({
         () => data.communeDefinedDocuments || []
     );
 
-    const handleAutoSave = (docIndex: number, field: string, value: string | number) => {
-        if (!db) return;
+    // Old Firestore AutoSave removed.
+    // Sync is handled via useEffect -> handleCommuneDocsChange -> Parent Logic.
 
-        const assessmentId = `assess_${periodId}_${communeId}`;
-        const assessmentRef = doc(db, 'assessments', assessmentId);
 
-        const updatedDocs = [...communeDefinedDocs];
-        if (updatedDocs[docIndex]) {
-            (updatedDocs[docIndex] as any)[field] = value;
-        } else {
-            updatedDocs[docIndex] = { [field]: value };
-        }
-
-        const fieldPath = `assessmentData.${indicator.id}.communeDefinedDocuments`;
-
-        setDoc(assessmentRef, {
-            assessmentData: {
-                [indicator.id]: {
-                    communeDefinedDocuments: updatedDocs
-                }
-            }
-        }, { merge: true })
-            .catch((error) => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({
-                    path: assessmentRef.path,
-                    operation: 'update',
-                    requestResourceData: { assessmentData: { [indicator.id]: { communeDefinedDocuments: updatedDocs } } },
-                }));
-                console.error(`❌ Auto-save failed for ${field} in document ${docIndex}:`, error);
-            });
-    };
-
-    const debouncedSave = useCallback(
-        debounce((docIndex: number, field: string, value: string | number) => {
-            handleAutoSave(docIndex, field, value);
-        }, 1000), // Đợi 1 giây
-        [communeDefinedDocs, db, periodId, communeId, indicator.id] // Dependencies for useCallback
-    );
 
     useEffect(() => {
         if (assignmentType === 'quantity') {
@@ -151,13 +104,13 @@ const RenderTC1LikeIndicator = ({
         onIsTaskedChange(indicator.id, !notTasked);
     };
 
-    const handleUploadComplete = useCallback((docIndex: number, newFile: { name: string; url: string; }) => {
-        onEvidenceChange(indicator.id, [newFile], docIndex);
-    }, [onEvidenceChange, indicator.id]);
+    const handleUploadComplete = useCallback((indicatorId: string, docIndex: number, newFile: any) => {
+        onEvidenceChange(indicatorId, [newFile], docIndex);
+    }, [onEvidenceChange]);
 
-    const handleAddLink = useCallback((docIndex: number, newLink: { name: string; url: string; }) => {
-        onEvidenceChange(indicator.id, [newLink], docIndex);
-    }, [onEvidenceChange, indicator.id]);
+    const handleAddLink = useCallback((indicatorId: string, docIndex: number, newLink: { name: string; url: string; }) => {
+        onEvidenceChange(indicatorId, [newLink], docIndex);
+    }, [onEvidenceChange]);
 
 
     const handleRemoveFile = useCallback((docIndex: number, fileToRemove: FileWithStatus) => {
@@ -179,12 +132,20 @@ const RenderTC1LikeIndicator = ({
             (newDocs[index] as any)[field] = value;
             setCommuneDefinedDocs(newDocs);
         } else {
-            newDocs[index] = { [field]: value };
+            // Initialize with default values to satisfy type requirements
+            newDocs[index] = {
+                name: '',
+                issueDate: '',
+                excerpt: '',
+                issuanceDeadlineDays: 7,
+                [field]: value
+            };
             setCommuneDefinedDocs(newDocs);
         }
 
         // Lên lịch lưu sau 1 giây
-        debouncedSave(index, field, value);
+        // debouncedSave(index, field, value); // REMOVED
+
     };
 
     const assignedCount = useMemo(() => {
@@ -291,7 +252,7 @@ const RenderTC1LikeIndicator = ({
                                 )}
                                 {docsToRender.length > 0 ? (
                                     <div className="space-y-3">
-                                        {docsToRender.map((doc, docIndex) => (
+                                        {docsToRender.map((doc: any, docIndex: number) => (
                                             <div key={docIndex} className="p-3 border-l-4 border-blue-300 rounded-r-md bg-transparent text-sm">
                                                 <div className="font-semibold text-primary mb-2">Văn bản chỉ đạo {docIndex + 1}{doc.name ? `: ${doc.name}` : ''}</div>
                                                 {assignmentType === 'specific' ? (
@@ -400,14 +361,14 @@ const RenderTC1LikeIndicator = ({
 
                             {docsToRender.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-                                    {docsToRender.map((doc, docIndex) => {
+                                    {docsToRender.map((doc: any, docIndex: number) => {
                                         const evidence = data.filesPerDocument?.[docIndex] || [];
                                         const isRequired = data.status !== 'pending' && isNotTasked === false && evidence.length === 0 && Number(data.value) > docIndex;
 
                                         return (
                                             <div key={docIndex} className="p-3 border rounded-lg grid gap-2 bg-transparent">
                                                 <Label className="font-medium text-center text-sm truncate">Minh chứng cho: <span className="font-bold text-primary">{doc.name || `Văn bản ${docIndex + 1}`}</span></Label>
-                                                <CT4EvidenceUploader
+                                                <Criterion1EvidenceUploader
                                                     indicatorId={indicator.id}
                                                     docIndex={docIndex}
                                                     evidence={evidence}
@@ -417,8 +378,9 @@ const RenderTC1LikeIndicator = ({
                                                     onPreview={onPreview}
                                                     periodId={periodId}
                                                     communeId={communeId}
-                                                    isRequired={isRequired}
-                                                    accept=".pdf"
+                                                    accept=".pdf, .doc, .docx, .xls, .xlsx"
+                                                    issueDate={doc.issueDate}
+                                                    issuanceDeadlineDays={doc.issuanceDeadlineDays}
                                                 />
                                             </div>
                                         )

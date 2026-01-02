@@ -12,7 +12,8 @@ import { UploadCloud, Loader2, X, Eye, CheckCircle, XCircle } from 'lucide-react
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import type { FileWithStatus } from './types';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+// FIXME: Firebase storage removed - needs MinIO refactoring
+// import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 const CT4EvidenceUploader = ({
     indicatorId,

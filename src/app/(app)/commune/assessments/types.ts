@@ -3,10 +3,11 @@ export type AssessmentStatus = 'achieved' | 'not-achieved' | 'pending';
 export type FileWithStatus = (File | {
     name: string,
     url: string,
-    signatureStatus?: 'validating' | 'valid' | 'invalid' | 'error' | null,
+    signatureStatus?: 'validating' | 'valid' | 'invalid' | 'error' | 'expired' | null,
     signatureError?: string | null,
     contentCheckStatus?: 'passed' | 'failed' | 'not_checked',
-    contentCheckIssues?: string[]
+    contentCheckIssues?: string[],
+    previewUrl?: string // URL of the converted PDF for preview
 });
 
 export type IndicatorValue = {

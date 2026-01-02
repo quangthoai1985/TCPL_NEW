@@ -27,145 +27,195 @@ import {
 } from '@/components/ui/chart';
 import { Download, Award } from 'lucide-react';
 import { Pie, PieChart, Cell, BarChart, XAxis, YAxis, Bar, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 import { useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { useData } from '@/context/DataContext';
 import PageHeader from '@/components/layout/page-header';
 
 export default function ReportsPage() {
-    const { assessmentPeriods, assessments, units: allUnits, criteria } = useData();
-    const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>(assessmentPeriods.find(p => p.isActive)?.id);
+  const { assessmentPeriods, assessments, units: allUnits, criteria } = useData();
+  const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>(assessmentPeriods.find(p => p.isActive)?.id);
 
-    // Calculate real data for charts based on the selected period
-    const { statusData, criteriaSuccessRate, chartConfig } = useMemo(() => {
-        if (!selectedPeriod) {
-            return { statusData: [], criteriaSuccessRate: [], chartConfig: {} };
+  // Calculate real data for charts based on the selected period
+  const { statusData, criteriaSuccessRate, chartConfig } = useMemo(() => {
+    if (!selectedPeriod) {
+      return { statusData: [], criteriaSuccessRate: [], chartConfig: {} };
+    }
+
+    const periodAssessments = assessments.filter(a => a.assessmentPeriodId === selectedPeriod);
+
+    const allCommuneUnits = allUnits.filter(u => u.type === 'commune');
+    const sentCommuneIds = new Set(periodAssessments.map(a => a.communeId));
+
+    const achievedCount = periodAssessments.filter(a => a.status === 'achieved_standard').length;
+    const approvedCount = periodAssessments.filter(a => a.status === 'approved').length;
+    const pendingCount = periodAssessments.filter(a => a.status === 'pending_review').length;
+    const rejectedCount = periodAssessments.filter(a => a.status === 'rejected').length;
+    const notSentCount = allCommuneUnits.length - sentCommuneIds.size;
+
+    const statusData = [
+      { name: 'Đạt chuẩn', value: achievedCount, fill: 'hsl(var(--chart-1))' },
+      { name: 'Đã duyệt', value: approvedCount, fill: 'hsl(var(--chart-2))' },
+      { name: 'Chờ duyệt', value: pendingCount, fill: 'hsl(var(--chart-3))' },
+      { name: 'Bị từ chối', value: rejectedCount, fill: 'hsl(var(--chart-4))' },
+      { name: 'Chưa gửi', value: notSentCount, fill: 'hsl(var(--muted))' },
+    ].filter(d => d.value > 0);
+
+    const chartConfig = {
+      value: {
+        label: 'Số lượng',
+      },
+      ...statusData.reduce((acc, cur) => {
+        acc[cur.name] = { label: cur.name, color: cur.fill };
+        return acc;
+      }, {} as any)
+    };
+
+    const criteriaSuccessRate = criteria.map((c, i) => {
+      const baseRate = 60;
+      const randomFactor = (i * 5 + approvedCount + (selectedPeriod?.charCodeAt(selectedPeriod.length - 1) || 0)) % 35;
+      return {
+        name: `TC ${i + 1}`,
+        "Tỷ lệ đạt": baseRate + randomFactor,
+        tooltip: c.name.replace(`Tiêu chí ${i + 1}: `, '')
+      };
+    });
+
+    return { statusData, criteriaSuccessRate, chartConfig };
+
+  }, [selectedPeriod, assessments, allUnits, criteria]);
+
+
+  const handleExportExcel = () => {
+    if (!selectedPeriod) return;
+
+    const periodName = assessmentPeriods.find(p => p.id === selectedPeriod)?.name || 'Bao_cao';
+    const allCommuneUnits = allUnits.filter(u => u.type === 'commune');
+    const periodAssessments = assessments.filter(a => a.assessmentPeriodId === selectedPeriod);
+
+    const data = allCommuneUnits.map(commune => {
+      const assessment = periodAssessments.find(a => a.communeId === commune.id);
+      let statusText = 'Chưa gửi';
+
+      if (assessment) {
+        switch (assessment.assessmentStatus) {
+          case 'achieved_standard': statusText = 'Đạt chuẩn'; break;
+          case 'pending_review': statusText = 'Chờ thẩm định'; break;
+          case 'returned_for_revision': statusText = 'Yêu cầu chỉnh sửa'; break;
+          case 'rejected': statusText = 'Không đạt'; break;
+          case 'draft': statusText = 'Đang soạn thảo'; break;
+          case 'not_started': statusText = 'Chưa bắt đầu'; break; // Should be covered by no assessment, but just in case
         }
-        
-        const periodAssessments = assessments.filter(a => a.assessmentPeriodId === selectedPeriod);
+      }
 
-        const allCommuneUnits = allUnits.filter(u => u.type === 'commune');
-        const sentCommuneIds = new Set(periodAssessments.map(a => a.communeId));
-        
-        const achievedCount = periodAssessments.filter(a => a.status === 'achieved_standard').length;
-        const approvedCount = periodAssessments.filter(a => a.status === 'approved').length;
-        const pendingCount = periodAssessments.filter(a => a.status === 'pending_review').length;
-        const rejectedCount = periodAssessments.filter(a => a.status === 'rejected').length;
-        const notSentCount = allCommuneUnits.length - sentCommuneIds.size;
+      return {
+        "Tên xã/phường": commune.name,
+        "Trạng thái": statusText,
+        "Ngày gửi": assessment?.assessmentSubmissionDate || '',
+        "Ngày công nhận": assessment?.approvalDate || '',
+      };
+    });
 
-        const statusData = [
-            { name: 'Đạt chuẩn', value: achievedCount, fill: 'hsl(var(--chart-1))' },
-            { name: 'Đã duyệt', value: approvedCount, fill: 'hsl(var(--chart-2))' },
-            { name: 'Chờ duyệt', value: pendingCount, fill: 'hsl(var(--chart-3))' },
-            { name: 'Bị từ chối', value: rejectedCount, fill: 'hsl(var(--chart-4))' },
-            { name: 'Chưa gửi', value: notSentCount, fill: 'hsl(var(--muted))' },
-        ].filter(d => d.value > 0);
+    // Add header row via sheet_add_json is automatic or we map keys
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Báo cáo");
 
-        const chartConfig = {
-          value: {
-            label: 'Số lượng',
-          },
-          ...statusData.reduce((acc, cur) => {
-            acc[cur.name] = { label: cur.name, color: cur.fill };
-            return acc;
-          }, {} as any)
-        };
+    // Fix column widths
+    const wscols = [
+      { wch: 30 }, // Tên xã
+      { wch: 20 }, // Trạng thái
+      { wch: 15 }, // Ngày gửi
+      { wch: 15 }, // Ngày công nhận
+    ];
+    worksheet['!cols'] = wscols;
 
-        const criteriaSuccessRate = criteria.map((c, i) => {
-            const baseRate = 60;
-            const randomFactor = (i * 5 + approvedCount + (selectedPeriod?.charCodeAt(selectedPeriod.length-1) || 0)) % 35;
-            return {
-                name: `TC ${i + 1}`,
-                "Tỷ lệ đạt": baseRate + randomFactor,
-                tooltip: c.name.replace(`Tiêu chí ${i + 1}: `, '')
-            };
-        });
-        
-        return { statusData, criteriaSuccessRate, chartConfig };
-
-    }, [selectedPeriod, assessments, allUnits, criteria]);
+    XLSX.writeFile(workbook, `Bao_cao_TCPL_${periodName.replace(/\s+/g, '_')}.xlsx`);
+  };
 
 
   return (
     <>
-    <PageHeader title="Báo cáo & Thống kê" description="Phân tích và xem báo cáo chi tiết về tình hình tiếp cận pháp luật theo từng đợt."/>
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
+      <PageHeader title="Báo cáo & Thống kê" description="Phân tích và xem báo cáo chi tiết về tình hình tiếp cận pháp luật theo từng đợt." />
+      <div className="flex flex-col gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-                <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                 <SelectTrigger className="w-[280px]">
-                    <SelectValue placeholder="Chọn đợt đánh giá" />
+                  <SelectValue placeholder="Chọn đợt đánh giá" />
                 </SelectTrigger>
                 <SelectContent>
-                    {assessmentPeriods.map(period => (
-                        <SelectItem key={period.id} value={period.id}>{period.name}</SelectItem>
-                    ))}
+                  {assessmentPeriods.map(period => (
+                    <SelectItem key={period.id} value={period.id}>{period.name}</SelectItem>
+                  ))}
                 </SelectContent>
-                </Select>
-                <DropdownMenu>
+              </Select>
+              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button>
+                  <Button>
                     <Download className="mr-2 h-4 w-4" />
                     Tải xuống
-                    </Button>
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                    <DropdownMenuItem>Tải báo cáo PDF</DropdownMenuItem>
-                    <DropdownMenuItem>Xuất ra Excel (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem disabled>Tải báo cáo PDF (Coming Soon)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportExcel}>Xuất ra Excel (.xlsx)</DropdownMenuItem>
                 </DropdownMenuContent>
-                </DropdownMenu>
+              </DropdownMenu>
             </div>
-        </CardHeader>
-      </Card>
-      
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Phân bố trạng thái</CardTitle>
-            <CardDescription>Tỷ lệ các xã theo trạng thái đánh giá trong đợt đã chọn.</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-                 <PieChart>
-                    <Pie
-                        data={statusData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="name"
-                    >
-                        {statusData.map((entry) => (
-                        <Cell key={`cell-${entry.name}`} fill={entry.fill} />
-                        ))}
-                    </Pie>
-                    <Tooltip contentStyle={{
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-                        border: '1px solid hsl(var(--border))'
-                    }} />
-                    <Legend
-                        iconType="circle"
-                        layout="vertical"
-                        verticalAlign="middle"
-                        align="right"
-                        wrapperStyle={{ right: -10, paddingLeft: '20px' }}
-                    />
+        </Card>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Phân bố trạng thái</CardTitle>
+              <CardDescription>Tỷ lệ các xã theo trạng thái đánh giá trong đợt đã chọn.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    nameKey="name"
+                  >
+                    {statusData.map((entry) => (
+                      <Cell key={`cell-${entry.name}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                    border: '1px solid hsl(var(--border))'
+                  }} />
+                  <Legend
+                    iconType="circle"
+                    layout="vertical"
+                    verticalAlign="middle"
+                    align="right"
+                    wrapperStyle={{ right: -10, paddingLeft: '20px' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Tỷ lệ đạt theo tiêu chí</CardTitle>
-            <CardDescription>Tỷ lệ % xã đạt các chỉ tiêu trong từng tiêu chí cốt lõi.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={{}} className="h-[300px] w-full">
-               <ResponsiveContainer width="100%" height="100%">
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Tỷ lệ đạt theo tiêu chí</CardTitle>
+              <CardDescription>Tỷ lệ % xã đạt các chỉ tiêu trong từng tiêu chí cốt lõi.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={{}} className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={criteriaSuccessRate} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" tickLine={false} axisLine={false} />
@@ -202,12 +252,12 @@ export default function ReportsPage() {
                     />
                     <Bar dataKey="Tỷ lệ đạt" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                   </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
     </>
   );
 }

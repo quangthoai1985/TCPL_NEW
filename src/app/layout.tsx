@@ -4,7 +4,7 @@ import { Inter, Outfit, Be_Vietnam_Pro } from 'next/font/google';
 import './globals.css';
 
 import { Toaster } from "@/components/ui/toaster";
-import { DataProvider } from '@/context/DataContext';
+
 
 // Khai báo các font chữ mới
 const inter = Inter({
@@ -35,10 +35,8 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${inter.variable} ${outfit.variable} ${beVietnamPro.variable}`}>
       <body className="font-sans antialiased bg-background text-foreground">
-        <DataProvider>
-          {children}
-          <Toaster />
-        </DataProvider>
+        {children}
+        <Toaster />
       </body>
     </html>
   );

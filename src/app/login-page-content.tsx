@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -12,46 +11,39 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
-import { useData } from '@/context/DataContext';
 import { useRouter } from 'next/navigation';
-import React from 'react';
+import React, { useActionState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { authenticate } from '@/actions/auth-actions';
+
+// Mock config for now since DataContext is being replaced
+const loginConfig = {
+  backgroundImageUrl: undefined,
+  primaryLogoUrl: "/logo.png",
+  primaryLogoWidth: 100,
+  primaryLogoHeight: 100,
+  secondaryLogoUrl: "https://firebasestorage.googleapis.com/v0/b/chuan-tiep-can-pl.firebasestorage.app/o/config%2Flogo_secondary%2FLogo_t%E1%BB%89nh_An_Giang.svg?alt=media&token=77aa4898-eb83-46fc-95ce-fa1f34c81eec",
+  secondaryLogoWidth: 160,
+  secondaryLogoHeight: 160,
+};
 
 export default function LoginPageContent() {
-  const { setLoginInfo, loading, currentUser, loginConfig } = useData();
   const router = useRouter();
   const { toast } = useToast();
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
+
+  // useActionState (React 19) replaces useFormState
+  const [errorMessage, dispatch, isPending] = useActionState(authenticate, undefined);
 
   React.useEffect(() => {
-    if (!loading && currentUser) {
-      router.push('/dashboard');
-    }
-  }, [currentUser, loading, router]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = await setLoginInfo(email, password);
-    if (success) {
-      // The useEffect above will handle the redirect
-    } else {
+    if (errorMessage) {
       toast({
         variant: 'destructive',
         title: "Đăng nhập thất bại",
-        description: "Email hoặc mật khẩu không chính xác.",
+        description: errorMessage,
       });
     }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  }, [errorMessage, toast]);
 
   const {
     backgroundImageUrl,
@@ -145,17 +137,15 @@ export default function LoginPageContent() {
               </div>
             </CardHeader>
             <CardContent className="pb-8 px-8">
-              <form onSubmit={handleLogin} className="grid gap-5">
+              <form action={dispatch} className="grid gap-5">
                 <div className="grid gap-2">
-                  <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
+                  <Label htmlFor="username" className="text-gray-700 font-medium">Tên đăng nhập</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="admin@angiang.gov.vn"
+                    id="username"
+                    name="username"
+                    type="text"
+                    placeholder="admin_angiang"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
                     className="bg-white/50 border-gray-200 focus:bg-white transition-all duration-200 h-11"
                   />
                 </div>
@@ -165,16 +155,14 @@ export default function LoginPageContent() {
                   </div>
                   <Input
                     id="password"
+                    name="password"
                     type="password"
                     required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
                     className="bg-white/50 border-gray-200 focus:bg-white transition-all duration-200 h-11"
                   />
                 </div>
-                <Button type="submit" className="w-full h-11 text-base font-semibold shadow-lg mt-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 transition-all duration-300" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+                <Button type="submit" className="w-full h-11 text-base font-semibold shadow-lg mt-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 transition-all duration-300" disabled={isPending}>
+                  {isPending && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
                   Đăng nhập
                 </Button>
               </form>

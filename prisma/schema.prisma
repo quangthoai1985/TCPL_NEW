@@ -1,0 +1,128 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  password    String
+  displayName String
+  phoneNumber String?
+  role        String   @default("commune_staff") // 'admin' | 'commune_staff'
+  communeId   String?
+  commune     Unit?    @relation(fields: [communeId], references: [id])
+  assessments Assessment[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Unit {
+  id           String  @id @default(cuid())
+  name         String
+  type         String  // 'province' | 'district' | 'commune'
+  parentId     String?
+  parent       Unit?   @relation("UnitHierarchy", fields: [parentId], references: [id])
+  children     Unit[]  @relation("UnitHierarchy")
+  address      String?
+  headquarters String?
+
+  users       User[]
+  assessments Assessment[]
+}
+
+model AssessmentPeriod {
+  id                   String   @id @default(cuid())
+  name                 String
+  startDate            DateTime
+  endDate              DateTime
+  isActive             Boolean  @default(true)
+  registrationDeadline DateTime?
+  totalIndicators      Int?
+
+  assessments Assessment[]
+}
+
+model Criterion {
+  id                     String      @id @default(cuid())
+  name                   String
+  description            String
+  assignmentType         String?     // 'quantity' | 'specific'
+  assignedDocumentsCount Int?
+
+  indicators Indicator[]
+  documents  Json?       //Document structure
+}
+
+model Indicator {
+  id                        String    @id @default(cuid())
+  name                      String
+  description               String
+  standardLevel             String
+  inputType                 String
+  evidenceRequirement       String?
+  order                     Int       @default(0)
+  parentCriterionId         String
+  criterion                 Criterion @relation(fields: [parentCriterionId], references: [id])
+
+  originalParentIndicatorId String?
+  templateFiles             Json?
+  passRule                  Json?
+  assignmentType            String?
+  assignedDocumentsCount    Int?
+  documents                 Json?
+}
+
+model Assessment {
+  id                 String           @id @default(cuid())
+  communeId          String
+  commune            Unit             @relation(fields: [communeId], references: [id])
+  assessmentPeriodId String
+  period             AssessmentPeriod @relation(fields: [assessmentPeriodId], references: [id])
+
+  registrationStatus String @default("pending")
+  assessmentStatus   String @default("not_started")
+
+  registrationSubmissionDate DateTime?
+  assessmentSubmissionDate   DateTime?
+  approvalDate               DateTime?
+  registrationFormUrl        String?
+
+  submittedById String?
+  submittedBy   User?   @relation(fields: [submittedById], references: [id])
+
+  assessmentData Json? // Record<string, IndicatorResult>
+
+  registrationRejectionReason String?
+  assessmentRejectionReason   String?
+  announcementDecisionUrl     String?
+  announcementDate            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GuidanceDocument {
+  id        String   @id @default(cuid())
+  name      String
+  number    String
+  issueDate DateTime
+  excerpt   String
+  fileUrl   String?
+}
+
+model LoginConfig {
+  id                  String  @id // 'loginPage'
+  backgroundImageUrl  String?
+  primaryLogoUrl      String?
+  primaryLogoWidth    Int?
+  primaryLogoHeight   Int?
+  secondaryLogoUrl    String?
+  secondaryLogoWidth  Int?
+  secondaryLogoHeight Int?
+}

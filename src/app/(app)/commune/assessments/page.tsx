@@ -5,17 +5,27 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, AlertTriangle, Download, Eye } from "lucide-react";
+import { Loader2, AlertTriangle, Download, Eye, CheckCircle2, Clock, XCircle, BarChart3, ChevronDown, FileCheck } from "lucide-react";
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+
+// Dynamically import PDFViewer to avoid SSR canvas issues
+const PDFViewer = dynamic(() => import("@/components/PDFViewer"), {
+    ssr: false,
+    loading: () => (
+        <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Đang tải PDF Viewer...</span>
+        </div>
+    ),
+});
 import { useToast } from "@/hooks/use-toast";
 import { useData } from "@/context/DataContext";
 import PageHeader from "@/components/layout/page-header";
 import type { Indicator, Criterion, Assessment, IndicatorResult } from '@/lib/data';
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { httpsCallable } from "firebase/functions";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import type { AssessmentStatus, FileWithStatus, AssessmentValues } from './types';
 import Criterion1Component from "./Criterion1Component";
 import RenderBooleanIndicator from "./RenderBooleanIndicator";
@@ -197,8 +207,8 @@ const evaluateStatus = (
 
         if (isCT1_1) {
             for (let i = 0; i < numValue; i++) {
-                const docFiles = filesPerDocument?.[i] || filesPerDocument?.[String(i)] || [];
-                const validDocFiles = docFiles.filter(f =>
+                const docFiles = (filesPerDocument as any)?.[i] || (filesPerDocument as any)?.[String(i)] || [];
+                const validDocFiles = docFiles.filter((f: FileWithStatus) =>
                     (f instanceof File) || (f.url && f.url.trim() !== '') || (f.name && f.name.trim() !== '')
                 );
 
@@ -207,10 +217,10 @@ const evaluateStatus = (
                     return 'not-achieved';
                 }
 
-                const hasInvalid = validDocFiles.some(f => !(f instanceof File) && (f.signatureStatus === 'invalid' || f.signatureStatus === 'error'));
+                const hasInvalid = validDocFiles.some((f: FileWithStatus) => !(f instanceof File) && (f.signatureStatus === 'invalid' || f.signatureStatus === 'error'));
                 if (hasInvalid) return 'not-achieved';
 
-                const hasValidating = validDocFiles.some(f => !(f instanceof File) && f.signatureStatus === 'validating');
+                const hasValidating = validDocFiles.some((f: FileWithStatus) => !(f instanceof File) && f.signatureStatus === 'validating');
                 if (hasValidating) return 'pending';
             }
         }
@@ -352,6 +362,7 @@ const sanitizeDataForFirestore = (data: AssessmentValues): Record<string, Indica
             url: f.url || '',
             signatureStatus: f.signatureStatus || null,
             signatureError: f.signatureError || null,
+            previewUrl: f.previewUrl || null, // Preserve preview URL for converted files
         };
     });
 
@@ -379,10 +390,10 @@ const sanitizeDataForFirestore = (data: AssessmentValues): Record<string, Indica
 
 export default function SelfAssessmentPage() {
     const router = useRouter();
-    const { storage, currentUser, assessmentPeriods, criteria, assessments, updateAssessments, updateSingleAssessment, deleteFileByUrl, functions } = useData();
+    const { currentUser, assessmentPeriods, criteria, assessments, updateAssessments, updateAssessment: updateSingleAssessment, deleteFile, uploadFile, getAssessmentPeriod, getCriteria, getAssessments } = useData();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [previewFile, setPreviewFile] = useState<{ name: string, url: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ name: string, url: string, previewUrl?: string } | null>(null);
 
     const unsavedFilesRef = useRef<string[]>([]);
 
@@ -394,7 +405,7 @@ export default function SelfAssessmentPage() {
                 const filesToDelete = [...unsavedFilesRef.current];
                 filesToDelete.forEach(async (fileUrl) => {
                     try {
-                        await deleteFileByUrl(fileUrl);
+                        await deleteFile(fileUrl);
                     } catch (error) {
                         console.error(`Lỗi khi dọn dẹp tệp mồ côi ${fileUrl}:`, error);
                     }
@@ -402,7 +413,7 @@ export default function SelfAssessmentPage() {
                 unsavedFilesRef.current = [];
             }
         };
-    }, [deleteFileByUrl]);
+    }, [deleteFile]);
 
     const recalculateStatuses = useCallback((data: AssessmentValues, criteria: Criterion[]): AssessmentValues => {
         const nextData = { ...data };
@@ -602,6 +613,48 @@ export default function SelfAssessmentPage() {
         return hasPending ? 'pending' : 'achieved';
     }, [assessmentData, calculateGroupHeaderStatus, criteria]);
 
+    // Tính toán thống kê chỉ tiêu cho mỗi tiêu chí
+    const calculateCriterionStats = useCallback((criterion: Criterion) => {
+        // CHỈ TIÊU LỚN: Các chỉ tiêu gốc (không có originalParentIndicatorId)
+        // Bao gồm cả group_header và các chỉ tiêu độc lập
+        const mainIndicators = criterion.indicators.filter(i => !i.originalParentIndicatorId);
+        const mainIndicatorsCount = mainIndicators.length;
+
+        // CHỈ TIÊU CÓ THỂ CHẤM: Tất cả chỉ tiêu KHÔNG phải group_header
+        const scoreableIndicators = criterion.indicators.filter(i =>
+            i.inputType !== 'group_header'
+        );
+        const scoreableCount = scoreableIndicators.length;
+
+        let achievedCount = 0;
+        let notAchievedCount = 0;
+        let pendingCount = 0;
+
+        for (const indicator of scoreableIndicators) {
+            const status = assessmentData[indicator.id]?.status;
+            if (status === 'achieved') {
+                achievedCount++;
+            } else if (status === 'not-achieved') {
+                notAchievedCount++;
+            } else {
+                pendingCount++;
+            }
+        }
+
+        const scoredCount = achievedCount + notAchievedCount;
+        const progressPercentage = scoreableCount > 0 ? Math.round((scoredCount / scoreableCount) * 100) : 0;
+
+        return {
+            mainIndicatorsCount,  // Số chỉ tiêu lớn
+            scoreableCount,       // Số chỉ tiêu có thể chấm
+            scoredCount,          // Số đã chấm
+            pendingCount,         // Số chưa chấm
+            achievedCount,        // Số đạt
+            notAchievedCount,     // Số không đạt
+            progressPercentage    // Phần trăm tiến độ
+        };
+    }, [assessmentData]);
+
     const handleIsTaskedChange = useCallback((id: string, isTasked: boolean) => {
         setAssessmentData(prev => {
             const item = criteria.flatMap(c => c.indicators).find(i => i.id === id);
@@ -721,7 +774,7 @@ export default function SelfAssessmentPage() {
         setAssessmentData(recalculatedData);
         // ĐÃ XÓA DÒNG setAssessmentData(newData); GÂY LỖI TẠI ĐÂY
 
-        // 3. Nếu là xóa file, Sync ngay lập tức lên Firestore
+        // 3. Nếu là xóa file, Sync ngay lập tức lên Firestore VÀ Xóa file khỏi Storage (MinIO)
         if (fileToRemove) {
             if (!activePeriod || !currentUser) {
                 toast({ variant: "destructive", title: "Lỗi", description: "Không thể lưu thay đổi (thiếu thông tin phiên)." });
@@ -729,18 +782,36 @@ export default function SelfAssessmentPage() {
             }
             const currentAssessment = assessments.find(a => a.assessmentPeriodId === activePeriod.id && a.communeId === currentUser.communeId);
             if (!currentAssessment) {
-                // toast({ variant: "destructive", title: "Lỗi", description: "Không tìm thấy hồ sơ đánh giá." });
                 return;
             }
 
             try {
-                toast({ title: "Đang xóa...", description: "Đang cập nhật dữ liệu..." });
+                toast({ title: "Đang xóa...", description: "Đang cập nhật dữ liệu và xóa tệp..." });
+
+                // Cập nhật DB trước
                 const updatedAssessment: Assessment = {
                     ...currentAssessment,
                     assessmentData: sanitizeDataForFirestore(recalculatedData),
                 };
                 await updateSingleAssessment(updatedAssessment);
-                toast({ title: "Đã xóa", description: "Tệp đã được xóa khỏi hồ sơ." });
+
+                // Gọi Server Action xóa file MinIO
+                if ('url' in fileToRemove && fileToRemove.url) {
+                    await deleteFile(fileToRemove.url);
+
+                    // Also delete the preview file if it exists
+                    if ('previewUrl' in fileToRemove && fileToRemove.previewUrl) {
+                        try {
+                            await deleteFile(fileToRemove.previewUrl);
+                            console.log('Preview file deleted:', fileToRemove.previewUrl);
+                        } catch (previewErr) {
+                            console.warn('Could not delete preview file:', previewErr);
+                            // Don't fail if preview deletion fails
+                        }
+                    }
+                }
+
+                toast({ title: "Đã xóa", description: "Tệp đã được xóa hoàn toàn." });
             } catch (err) {
                 console.error("Lỗi khi sync xóa file:", err);
                 toast({ variant: "destructive", title: "Lỗi", description: "Không thể lưu thay đổi xóa file." });
@@ -751,7 +822,7 @@ export default function SelfAssessmentPage() {
 
 
     const handleSaveDraft = useCallback(async () => {
-        if (!activePeriod || !currentUser || !storage) {
+        if (!activePeriod || !currentUser) {
             toast({ variant: 'destructive', title: 'Lỗi', description: 'Không tìm thấy kỳ đánh giá hoặc người dùng.' });
             return;
         }
@@ -772,18 +843,64 @@ export default function SelfAssessmentPage() {
                         if (file instanceof File) {
                             const promise = async () => {
                                 try {
-                                    const filePath = docIndex !== undefined
-                                        ? `hoso/${currentUser.communeId}/evidence/${activePeriod.id}/${indicatorId}/${docIndex}/${file.name}`
-                                        : `hoso/${currentUser.communeId}/evidence/${activePeriod.id}/${indicatorId}/${file.name}`;
+                                    // Determine config for verification
+                                    let issueDate = '';
+                                    let issuanceDeadlineDays = '';
 
-                                    const storageRef = ref(storage, filePath);
-                                    const snapshot = await uploadBytes(storageRef, file);
-                                    const downloadURL = await getDownloadURL(snapshot.ref);
+                                    // Find parent criterion
+                                    const criterion = criteria.find(c => (c.indicators || []).some(i => i.id === indicatorId));
+
+                                    if (criterion && docIndex !== undefined) {
+                                        // Logic to get doc config
+                                        // This is simplified but should cover TC1 and TC2.4.1 logic
+                                        // Priority: 1. Specific Config (Admin) 2. Commune Defined (User Input)
+
+                                        const assignmentType = criterion.assignmentType || 'specific';
+
+                                        if (assignmentType === 'specific') {
+                                            const docConfig = criterion.documents?.[docIndex];
+                                            if (docConfig?.issueDate) {
+                                                issueDate = docConfig.issueDate;
+                                                issuanceDeadlineDays = String(docConfig.issuanceDeadlineDays || 7);
+                                            }
+                                        } else {
+                                            // quantity (User Defined)
+                                            // Need to find communeDefinedDocuments for this indicator
+                                            // assessmentData object holds current values
+                                            const currentIndicatorData = assessmentData[indicatorId];
+                                            const communeDocs = currentIndicatorData?.communeDefinedDocuments;
+                                            const userDoc = communeDocs?.[docIndex];
+
+                                            if (userDoc?.issueDate) {
+                                                issueDate = userDoc.issueDate;
+                                                issuanceDeadlineDays = String(userDoc.issuanceDeadlineDays || 30);
+                                            }
+                                        }
+                                    }
+
+                                    // Upload and Verify
+                                    const result = await uploadFile(
+                                        file,
+                                        currentUser.communeId!,
+                                        activePeriod.id,
+                                        indicatorId,
+                                        issueDate,
+                                        issuanceDeadlineDays
+                                    );
+
+                                    // Update State with verification result
+                                    const newFileObj: FileWithStatus = {
+                                        name: file.name,
+                                        url: result.url,
+                                        signatureStatus: result.signatureStatus as any, // Cast to any to avoid union type mismatch with FileWithStatus temporarily
+                                        signatureError: result.signatureError,
+                                        previewUrl: result.previewUrl // Add preview URL for converted files
+                                    };
 
                                     if (docIndex !== undefined) {
-                                        assessmentData[indicatorId].filesPerDocument![docIndex][fileIndex] = { name: file.name, url: downloadURL };
+                                        (assessmentData[indicatorId].filesPerDocument as Record<number, (File | FileWithStatus)[]>)[docIndex][fileIndex] = newFileObj;
                                     } else {
-                                        assessmentData[indicatorId].files[fileIndex] = { name: file.name, url: downloadURL };
+                                        assessmentData[indicatorId].files[fileIndex] = newFileObj;
                                     }
                                 } catch (uploadError) {
                                     console.error(`Lỗi khi tải lên file ${file.name}:`, uploadError);
@@ -821,7 +938,7 @@ export default function SelfAssessmentPage() {
 
             currentUnsavedUrls.forEach(async (url) => {
                 try {
-                    await deleteFileByUrl(url);
+                    await deleteFile(url);
                 } catch (error) {
                 }
             });
@@ -844,7 +961,7 @@ export default function SelfAssessmentPage() {
         } finally {
             setIsSubmitting(false);
         }
-    }, [activePeriod, currentUser, storage, assessmentData, assessments, updateSingleAssessment, toast, deleteFileByUrl]);
+    }, [activePeriod, currentUser, assessmentData, assessments, updateSingleAssessment, toast, deleteFile]);
 
     useEffect(() => {
         const hasUnsavedFiles = Object.values(assessmentData).some(indicator =>
@@ -919,8 +1036,8 @@ export default function SelfAssessmentPage() {
 
 
     const handleSubmit = async () => {
-        if (!activePeriod || !currentUser || !storage) {
-            toast({ variant: 'destructive', title: 'Lỗi', description: 'Không tìm thấy kỳ đánh giá, người dùng hoặc dịch vụ lưu trữ.' });
+        if (!activePeriod || !currentUser) {
+            toast({ variant: 'destructive', title: 'Lỗi', description: 'Không tìm thấy kỳ đánh giá hoặc người dùng.' });
             return;
         }
 
@@ -962,39 +1079,7 @@ export default function SelfAssessmentPage() {
         }
     };
 
-    const handlePreview = async (file: { name: string, url: string }) => {
-        if (!functions) {
-            toast({ variant: "destructive", title: "Lỗi", description: "Dịch vụ Functions chưa sẵn sàng." });
-            return;
-        }
-
-        // Kiểm tra xem URL có phải là Firebase Storage không
-        if (file.url.includes("firebasestorage.googleapis.com")) {
-            toast({ title: "Đang tải bản xem trước...", description: "Đang lấy link bảo mật..." });
-            try {
-                // Extract file path from URL
-                // URL format: .../o/path%2Fto%2Ffile?alt=...
-                const decodedUrl = decodeURIComponent(file.url);
-                const matches = decodedUrl.match(/\/o\/(.*?)\?/);
-
-                if (matches && matches[1]) {
-                    const filePath = matches[1];
-                    const getSignedUrlFunc = httpsCallable<{ filePath: string }, { signedUrl: string }>(functions, 'getSignedUrlForFile');
-
-                    const result = await getSignedUrlFunc({ filePath });
-
-                    if (result.data.signedUrl) {
-                        setPreviewFile({ name: file.name, url: result.data.signedUrl });
-                        return;
-                    }
-                }
-            } catch (error) {
-                console.error("Lỗi khi lấy signed URL:", error);
-                toast({ variant: "destructive", title: "Lỗi xem trước", description: "Không thể tạo link xem trước bảo mật. Đang thử link gốc..." });
-            }
-        }
-
-        // Fallback or non-firebase file
+    const handlePreview = async (file: { name: string, url: string, previewUrl?: string }) => {
         setPreviewFile(file);
     };
 
@@ -1059,7 +1144,7 @@ export default function SelfAssessmentPage() {
 
                     {activePeriod && currentUser && (
                         <div className="grid gap-8">
-                            {criteria.map((criterion, index) => {
+                            {[...criteria].sort((a, b) => a.id.localeCompare(b.id)).map((criterion, index) => {
                                 const criterionStatus = calculateCriterionStatus(criterion);
 
                                 // Card Styles based on status
@@ -1078,7 +1163,12 @@ export default function SelfAssessmentPage() {
                                     return (
                                         <div key={criterion.id} className="relative">
                                             <div className="absolute -left-3 top-6 bottom-6 w-1 bg-slate-200 rounded-full hidden xl:block"></div>
-                                            <Card className={`overflow-hidden transition-all duration-300 hover:shadow-md ${cardBorderColor}`}>
+                                            <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] ${criterionStatus === 'achieved'
+                                                ? 'border-green-300 shadow-lg shadow-green-100/60 bg-gradient-to-br from-white to-green-50/30'
+                                                : criterionStatus === 'not-achieved'
+                                                    ? 'border-red-300 shadow-lg shadow-red-100/60 bg-gradient-to-br from-white to-red-50/30'
+                                                    : 'border-amber-300 shadow-lg shadow-amber-100/60 bg-gradient-to-br from-white to-amber-50/30'
+                                                }`}>
                                                 <Accordion type="single" collapsible className="w-full">
                                                     <Criterion1Component
                                                         criterion={criterion}
@@ -1102,19 +1192,118 @@ export default function SelfAssessmentPage() {
                                 return (
                                     <div key={criterion.id} className="relative">
                                         <div className="absolute -left-3 top-6 bottom-6 w-1 bg-slate-200 rounded-full hidden xl:block"></div>
-                                        <Card className={`overflow-hidden transition-all duration-300 hover:shadow-md ${cardBorderColor}`}>
+                                        <Card className={`overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 min-h-[200px] ${criterionStatus === 'achieved'
+                                            ? 'border-green-300 shadow-lg shadow-green-100/60 bg-gradient-to-br from-white to-green-50/30'
+                                            : criterionStatus === 'not-achieved'
+                                                ? 'border-red-300 shadow-lg shadow-red-100/60 bg-gradient-to-br from-white to-red-50/30'
+                                                : 'border-amber-300 shadow-lg shadow-amber-100/60 bg-gradient-to-br from-white to-amber-50/30'
+                                            }`}>
                                             <Accordion type="single" collapsible className="w-full">
                                                 <AccordionItem value={criterion.id} className="border-0">
-                                                    <AccordionTrigger className={`px-6 py-5 hover:no-underline ${headerBgColor} data-[state=open]:border-b`}>
-                                                        <div className="flex items-center gap-4 flex-1 text-left">
-                                                            <div className="flex-shrink-0">
-                                                                <StatusBadge status={criterionStatus} isCriterion={true} />
+                                                    <AccordionTrigger className={`px-6 py-5 hover:no-underline data-[state=open]:border-b transition-all ${criterionStatus === 'achieved'
+                                                        ? 'bg-gradient-to-r from-green-100/90 to-green-50/50 hover:from-green-100 hover:to-green-100/70'
+                                                        : criterionStatus === 'not-achieved'
+                                                            ? 'bg-gradient-to-r from-red-100/90 to-red-50/50 hover:from-red-100 hover:to-red-100/70'
+                                                            : 'bg-gradient-to-r from-amber-100/90 to-amber-50/50 hover:from-amber-100 hover:to-amber-100/70'
+                                                        }`}>
+                                                        <div className="flex flex-col gap-4 flex-1 text-left w-full">
+                                                            {/* Header Row */}
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="flex-shrink-0">
+                                                                    <StatusBadge status={criterionStatus} isCriterion={true} />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <h3 className="text-lg font-bold text-foreground">
+                                                                        Tiêu chí {criterion.id.replace('TC', '').replace(/^0+/, '')}: {criterion.name.replace(/^Tiêu chí \d+[:.]\s*/i, '')}
+                                                                    </h3>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex-1">
-                                                                <h3 className="text-lg font-bold text-foreground">
-                                                                    Tiêu chí {index + 1}: {criterion.name.replace(`Tiêu chí ${index + 1}: `, '')}
-                                                                </h3>
-                                                            </div>
+
+                                                            {/* Statistics Grid */}
+                                                            {(() => {
+                                                                const stats = calculateCriterionStats(criterion);
+                                                                return (
+                                                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+                                                                        {/* Chỉ tiêu lớn */}
+                                                                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-slate-200/50">
+                                                                            <div className="p-1.5 rounded-md bg-indigo-100">
+                                                                                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] text-slate-500 font-medium">Chỉ tiêu lớn</span>
+                                                                                <span className="text-sm font-bold text-slate-700">{stats.mainIndicatorsCount}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Có thể chấm */}
+                                                                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-blue-200/50">
+                                                                            <div className="p-1.5 rounded-md bg-blue-100">
+                                                                                <FileCheck className="w-4 h-4 text-blue-600" />
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] text-slate-500 font-medium">Có thể chấm</span>
+                                                                                <span className="text-sm font-bold text-blue-600">{stats.scoreableCount}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Đã chấm */}
+                                                                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-purple-200/50">
+                                                                            <div className="p-1.5 rounded-md bg-purple-100">
+                                                                                <Clock className="w-4 h-4 text-purple-600" />
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] text-slate-500 font-medium">Đã chấm</span>
+                                                                                <span className="text-sm font-bold text-purple-600">{stats.scoredCount}/{stats.scoreableCount}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Đạt */}
+                                                                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-green-200/50">
+                                                                            <div className="p-1.5 rounded-md bg-green-100">
+                                                                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] text-slate-500 font-medium">Đạt</span>
+                                                                                <span className="text-sm font-bold text-green-600">{stats.achievedCount}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Không đạt */}
+                                                                        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-2 shadow-sm border border-red-200/50">
+                                                                            <div className="p-1.5 rounded-md bg-red-100">
+                                                                                <XCircle className="w-4 h-4 text-red-600" />
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[10px] text-slate-500 font-medium">Không đạt</span>
+                                                                                <span className="text-sm font-bold text-red-600">{stats.notAchievedCount}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+
+                                                            {/* Progress bar */}
+                                                            {(() => {
+                                                                const stats = calculateCriterionStats(criterion);
+                                                                return (
+                                                                    <div className="mt-3 space-y-1.5">
+                                                                        <div className="flex justify-between text-xs">
+                                                                            <span className="text-slate-500 font-medium">Tiến độ hoàn thành</span>
+                                                                            <span className={`font-semibold ${stats.progressPercentage >= 100 ? 'text-green-600' : 'text-blue-600'
+                                                                                }`}>
+                                                                                {stats.progressPercentage}%
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="h-2 bg-slate-200/70 rounded-full overflow-hidden">
+                                                                            <div
+                                                                                className={`h-full rounded-full transition-all duration-500 ${stats.progressPercentage >= 100 ? 'bg-gradient-to-r from-green-400 to-green-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                                                                                    }`}
+                                                                                style={{ width: `${stats.progressPercentage}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </AccordionTrigger>
                                                     <AccordionContent className="p-0">
@@ -1163,25 +1352,36 @@ export default function SelfAssessmentPage() {
             {activePeriod && currentUser && (
                 <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 pointer-events-none">
 
-                    {/* Phần thông báo lỗi (Alert) */}
+                    {/* Phần thông báo lỗi (Alert) - Thu gọn thành icon, hover để mở */}
                     {!canSubmit && submissionErrors.length > 0 && (
-                        <div className="mb-2 max-w-lg pointer-events-auto">
-                            <Alert variant="destructive" className="shadow-xl bg-white/95 backdrop-blur animate-in slide-in-from-right-5 border-red-200">
-                                <AlertTriangle className="h-4 w-4 mt-0.5 text-red-600" />
-                                <div className="ml-2">
-                                    <AlertTitle className="mb-2 font-bold text-red-700">Chưa thể gửi hồ sơ</AlertTitle>
-                                    <AlertDescription className="max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
-                                        <ul className="list-disc pl-4 space-y-2 text-xs text-slate-700">
-                                            {submissionErrors.map((err, idx) => (
-                                                <li key={idx}>
-                                                    <span className="font-semibold block mb-0.5">{err.label}:</span>
-                                                    <span className="text-red-600 font-medium">{err.message}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </AlertDescription>
-                                </div>
-                            </Alert>
+                        <div className="mb-2 pointer-events-auto group relative">
+                            {/* Icon thu gọn - luôn hiển thị */}
+                            <div className="w-12 h-12 rounded-full bg-red-500 shadow-xl flex items-center justify-center cursor-pointer animate-pulse hover:animate-none transition-all hover:scale-110">
+                                <AlertTriangle className="h-6 w-6 text-white" />
+                                <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-red-600 rounded-full text-xs font-bold flex items-center justify-center shadow-md">
+                                    {submissionErrors.length}
+                                </span>
+                            </div>
+
+                            {/* Panel mở rộng khi hover */}
+                            <div className="absolute bottom-0 right-0 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-50">
+                                <Alert variant="destructive" className="w-96 max-w-[90vw] shadow-2xl bg-white/98 backdrop-blur-md border-red-300 animate-in slide-in-from-right-5">
+                                    <AlertTriangle className="h-4 w-4 mt-0.5 text-red-600" />
+                                    <div className="ml-2">
+                                        <AlertTitle className="mb-2 font-bold text-red-700">Chưa thể gửi hồ sơ ({submissionErrors.length} lỗi)</AlertTitle>
+                                        <AlertDescription className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                                            <ul className="list-disc pl-4 space-y-2 text-xs text-slate-700">
+                                                {submissionErrors.map((err, idx) => (
+                                                    <li key={idx}>
+                                                        <span className="font-semibold block mb-0.5">{err.label}:</span>
+                                                        <span className="text-red-600 font-medium">{err.message}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </AlertDescription>
+                                    </div>
+                                </Alert>
+                            </div>
                         </div>
                     )}
 
@@ -1209,30 +1409,43 @@ export default function SelfAssessmentPage() {
                 </div>
             )}
 
-            <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
-                <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
-                    <DialogHeader className="p-6 pb-0">
-                        <DialogTitle>Xem trước: {previewFile?.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 px-6 pb-6 h-full">
-                        {previewFile && (
-                            <iframe
-                                src={`https://docs.google.com/gview?url=${encodeURIComponent(previewFile.url)}&embedded=true`}
-                                className="w-full h-full border rounded-md"
-                                title={previewFile.name}
-                            ></iframe>
-                        )}
+            <Sheet open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+                <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl p-0 flex flex-col">
+                    <SheetHeader className="p-4 pb-2 border-b shrink-0">
+                        <SheetTitle className="truncate pr-8">Xem trước: {previewFile?.name}</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex-1 overflow-hidden min-h-0">
+                        {previewFile && (() => {
+                            const targetUrl = previewFile.previewUrl || previewFile.url;
+                            const isPdf = previewFile.previewUrl ||
+                                previewFile.name.toLowerCase().endsWith('.pdf') ||
+                                targetUrl.toLowerCase().split('?')[0].endsWith('.pdf');
+
+                            if (isPdf) {
+                                const pdfSrc = `/api/preview?url=${encodeURIComponent(targetUrl)}&t=${new Date().getTime()}`;
+                                return <PDFViewer url={pdfSrc} className="w-full h-full" />;
+                            }
+
+                            // Fallback to Google Docs Viewer for other file types
+                            return (
+                                <iframe
+                                    src={`https://docs.google.com/gview?url=${encodeURIComponent(targetUrl)}&embedded=true`}
+                                    className="w-full h-full border rounded-md"
+                                    title={previewFile.name}
+                                />
+                            );
+                        })()}
                     </div>
-                    <DialogFooter className="p-6 pt-0 border-t">
+                    <SheetFooter className="p-4 pt-2 border-t shrink-0">
                         <Button variant="secondary" asChild>
                             <a href={previewFile?.url} target="_blank" rel="noopener noreferrer">
                                 <Download className="mr-2 h-4 w-4" /> Tải xuống
                             </a>
                         </Button>
                         <Button variant="outline" onClick={() => setPreviewFile(null)}>Đóng</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </div>
     );
 

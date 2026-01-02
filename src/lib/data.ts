@@ -93,7 +93,11 @@ export type Indicator = {
     excerpt: string;
     issuanceDeadlineDays: number;
   }[];
+
+  subIndicators?: Indicator[];
 };
+
+export type SubIndicator = Indicator;
 
 
 export type Criterion = {
@@ -150,7 +154,7 @@ export type Assessment = {
 };
 
 
-export type Document = {
+export type GuidanceDocument = {
   id: string;
   name: string;
   number: string;

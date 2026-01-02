@@ -1,14 +1,14 @@
-
 'use client';
 import AppHeader from '@/components/layout/app-header';
 import AppSidebar from '@/components/layout/app-sidebar';
-import { useData } from '@/context/DataContext';
+import { DataProvider, useData } from '@/context/DataContext';
+import { SessionProvider } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export default function AppLayout({
+function AppLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -77,4 +77,18 @@ export default function AppLayout({
       </div>
     </div>
   ) : null;
+}
+
+export default function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <SessionProvider>
+      <DataProvider>
+        <AppLayoutContent>{children}</AppLayoutContent>
+      </DataProvider>
+    </SessionProvider>
+  );
 }

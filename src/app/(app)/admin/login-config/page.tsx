@@ -10,7 +10,8 @@ import { useData } from '@/context/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import PageHeader from '@/components/layout/page-header';
 import type { LoginConfig } from '@/lib/data';
-import { getDownloadURL, ref, uploadBytes, listAll, deleteObject, StorageReference } from 'firebase/storage';
+// FIXME: Firebase storage removed - needs MinIO refactoring
+// import { getDownloadURL, ref, uploadBytes, listAll, deleteObject, StorageReference } from 'firebase/storage';
 import { Loader2, Trash2, UploadCloud, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -61,7 +62,7 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !storage) return;
-        
+
         setIsUploading(true);
         try {
             const filePath = `${storagePath}/${file.name}`;
@@ -78,7 +79,7 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
             setIsUploading(false);
         }
     };
-    
+
     const handleDelete = async () => {
         if (!deletingAsset) return;
         try {
@@ -87,7 +88,7 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
             setAssets(prev => prev.filter(a => a.url !== deletingAsset.url));
             setDeletingAsset(null);
         } catch (error) {
-             console.error("Delete error:", error);
+            console.error("Delete error:", error);
             toast({ variant: 'destructive', title: 'Lỗi', description: 'Không thể xóa tệp.' });
         }
     }
@@ -108,13 +109,13 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
                                 {assets.map(asset => (
                                     <div key={asset.url} className="relative group aspect-square">
                                         <Image src={asset.url} alt="asset" fill objectFit="cover" className="rounded-md border" />
-                                        <div 
+                                        <div
                                             className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-md"
                                             onClick={() => { onSelect(asset.url); setIsDialogOpen(false); }}
                                         >
                                             <CheckCircle className="h-10 w-10 text-white" />
                                         </div>
-                                         <Button 
+                                        <Button
                                             variant="destructive" size="icon"
                                             className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                                             onClick={() => setDeletingAsset(asset)}
@@ -124,10 +125,10 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
                                     </div>
                                 ))}
                                 <label className="relative flex flex-col items-center justify-center aspect-square border-2 border-dashed rounded-md cursor-pointer hover:bg-muted transition-colors">
-                                     <UploadCloud className="h-10 w-10 text-muted-foreground" />
-                                     <span className="mt-2 text-sm text-center text-muted-foreground">Tải ảnh mới</span>
-                                     <Input type="file" className="absolute inset-0 opacity-0 w-full h-full" accept="image/*" onChange={handleFileChange} disabled={isUploading}/>
-                                     {isUploading && <Loader2 className="absolute h-6 w-6 animate-spin"/>}
+                                    <UploadCloud className="h-10 w-10 text-muted-foreground" />
+                                    <span className="mt-2 text-sm text-center text-muted-foreground">Tải ảnh mới</span>
+                                    <Input type="file" className="absolute inset-0 opacity-0 w-full h-full" accept="image/*" onChange={handleFileChange} disabled={isUploading} />
+                                    {isUploading && <Loader2 className="absolute h-6 w-6 animate-spin" />}
                                 </label>
                             </div>
                         )}
@@ -137,8 +138,8 @@ function ImagePicker({ triggerButton, onSelect, storagePath }: { triggerButton: 
                     <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Đóng</Button>
                 </DialogFooter>
             </DialogContent>
-            
-             <AlertDialog open={!!deletingAsset} onOpenChange={(open) => !open && setDeletingAsset(null)}>
+
+            <AlertDialog open={!!deletingAsset} onOpenChange={(open) => !open && setDeletingAsset(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
@@ -169,14 +170,14 @@ export default function LoginConfigPage() {
             setConfig(loginConfig);
         }
     }, [loginConfig]);
-    
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target;
         setConfig(prev => ({ ...prev, [id]: value ? Number(value) : undefined }));
     }
-    
+
     const handleImageSelect = (field: 'primaryLogoUrl' | 'secondaryLogoUrl' | 'backgroundImageUrl') => (url: string) => {
-        setConfig(prev => ({ ...prev, [field]: url}));
+        setConfig(prev => ({ ...prev, [field]: url }));
     }
 
     const handleSave = async () => {
@@ -185,7 +186,7 @@ export default function LoginConfigPage() {
             return;
         }
         setIsSubmitting(true);
-        
+
         try {
             await updateLoginConfig(config as LoginConfig);
             toast({ title: 'Thành công!', description: 'Đã lưu cấu hình trang đăng nhập.' });
@@ -203,7 +204,7 @@ export default function LoginConfigPage() {
             <PageHeader title="Cấu hình trang đăng nhập" description="Tùy chỉnh giao diện của trang đăng nhập cho toàn hệ thống." />
 
             <div className="grid gap-6 md:grid-cols-2">
-                
+
                 <Card className="md:col-span-2">
                     <CardHeader>
                         <CardTitle>Logo</CardTitle>
@@ -211,7 +212,7 @@ export default function LoginConfigPage() {
                     </CardHeader>
                     <CardContent className="grid gap-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                             {/* Primary Logo */}
+                            {/* Primary Logo */}
                             <div className="grid gap-4">
                                 <Label className='font-semibold'>Logo chính</Label>
                                 <div className='mt-2 p-4 border rounded-md min-h-[124px] flex justify-center items-center bg-muted'>
@@ -221,7 +222,7 @@ export default function LoginConfigPage() {
                                         <p className="text-sm text-muted-foreground">Chưa có logo chính</p>
                                     )}
                                 </div>
-                                <ImagePicker 
+                                <ImagePicker
                                     triggerButton={<Button variant="outline" className="mt-2">Thay đổi Logo chính</Button>}
                                     onSelect={handleImageSelect('primaryLogoUrl')}
                                     storagePath="config/logo"
@@ -229,16 +230,16 @@ export default function LoginConfigPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="primaryLogoWidth">Chiều rộng (px)</Label>
-                                        <Input id="primaryLogoWidth" type="number" value={config.primaryLogoWidth || ''} onChange={handleInputChange}/>
+                                        <Input id="primaryLogoWidth" type="number" value={config.primaryLogoWidth || ''} onChange={handleInputChange} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="primaryLogoHeight">Chiều cao (px)</Label>
-                                        <Input id="primaryLogoHeight" type="number" value={config.primaryLogoHeight || ''} onChange={handleInputChange}/>
+                                        <Input id="primaryLogoHeight" type="number" value={config.primaryLogoHeight || ''} onChange={handleInputChange} />
                                     </div>
                                 </div>
                             </div>
-                             {/* Secondary Logo */}
-                             <div className="grid gap-4">
+                            {/* Secondary Logo */}
+                            <div className="grid gap-4">
                                 <Label className='font-semibold'>Logo phụ</Label>
                                 <div className='mt-2 p-4 border rounded-md min-h-[124px] flex justify-center items-center bg-muted'>
                                     {config.secondaryLogoUrl ? (
@@ -247,7 +248,7 @@ export default function LoginConfigPage() {
                                         <p className="text-sm text-muted-foreground">Chưa có logo phụ</p>
                                     )}
                                 </div>
-                                <ImagePicker 
+                                <ImagePicker
                                     triggerButton={<Button variant="outline" className="mt-2">Thay đổi Logo phụ</Button>}
                                     onSelect={handleImageSelect('secondaryLogoUrl')}
                                     storagePath="config/logo_secondary"
@@ -255,11 +256,11 @@ export default function LoginConfigPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="secondaryLogoWidth">Chiều rộng (px)</Label>
-                                        <Input id="secondaryLogoWidth" type="number" value={config.secondaryLogoWidth || ''} onChange={handleInputChange}/>
+                                        <Input id="secondaryLogoWidth" type="number" value={config.secondaryLogoWidth || ''} onChange={handleInputChange} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="secondaryLogoHeight">Chiều cao (px)</Label>
-                                        <Input id="secondaryLogoHeight" type="number" value={config.secondaryLogoHeight || ''} onChange={handleInputChange}/>
+                                        <Input id="secondaryLogoHeight" type="number" value={config.secondaryLogoHeight || ''} onChange={handleInputChange} />
                                     </div>
                                 </div>
                             </div>
@@ -267,7 +268,7 @@ export default function LoginConfigPage() {
                     </CardContent>
                 </Card>
 
-                 <Card className="md:col-span-2">
+                <Card className="md:col-span-2">
                     <CardHeader>
                         <CardTitle>Ảnh nền</CardTitle>
                         <CardDescription>Tải lên hoặc chọn ảnh nền sẽ hiển thị toàn trang.</CardDescription>
@@ -281,10 +282,10 @@ export default function LoginConfigPage() {
                                         <Image src={config.backgroundImageUrl} alt="background" fill objectFit='contain' />
                                     </div>
                                 ) : (
-                                     <p className="text-sm text-muted-foreground">Chưa có ảnh nền</p>
+                                    <p className="text-sm text-muted-foreground">Chưa có ảnh nền</p>
                                 )}
                             </div>
-                             <ImagePicker 
+                            <ImagePicker
                                 triggerButton={<Button variant="outline" className="mt-2">Thay đổi Ảnh nền</Button>}
                                 onSelect={handleImageSelect('backgroundImageUrl')}
                                 storagePath="config/background"
@@ -293,7 +294,7 @@ export default function LoginConfigPage() {
                     </CardContent>
                 </Card>
 
-                 <div className="md:col-span-2 flex justify-end">
+                <div className="md:col-span-2 flex justify-end">
                     <Button onClick={handleSave} disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Lưu thay đổi
@@ -304,4 +305,4 @@ export default function LoginConfigPage() {
     );
 }
 
-    
+

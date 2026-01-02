@@ -3,27 +3,27 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    CardFooter,
 } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from '@/components/ui/table';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,8 @@ import { useData } from '@/context/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import type { Assessment, Unit } from '@/lib/data';
 import { Input } from '@/components/ui/input';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+// FIXME: Firebase storage removed - needs MinIO refactoring
+// import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 
 function UploadDecision({ assessment, onUploadSuccess }: { assessment: Assessment, onUploadSuccess: (assessmentId: string, fileUrl: string) => void }) {
@@ -53,7 +54,7 @@ function UploadDecision({ assessment, onUploadSuccess }: { assessment: Assessmen
             const storageRef = ref(storage, filePath);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            
+
             onUploadSuccess(assessment.id, downloadURL);
             toast({ title: 'Thành công', description: 'Đã tải lên quyết định công nhận.' });
             setFile(null);
@@ -64,15 +65,15 @@ function UploadDecision({ assessment, onUploadSuccess }: { assessment: Assessmen
             setIsUploading(false);
         }
     }
-    
+
     return (
         <div className="flex items-center gap-2">
             <div className='flex-grow'>
                 <Input id={`file-${assessment.id}`} type="file" className="h-9 text-xs" onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} disabled={isUploading} />
-                 <p className="text-xs text-muted-foreground mt-1">Các tệp được chấp nhận: Ảnh, Video, Word, Excel, PDF. Dung lượng tối đa: 5MB.</p>
+                <p className="text-xs text-muted-foreground mt-1">Các tệp được chấp nhận: Ảnh, Video, Word, Excel, PDF. Dung lượng tối đa: 5MB.</p>
             </div>
             <Button size="sm" onClick={handleUpload} disabled={!file || isUploading}>
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin"/> : <UploadCloud className="h-4 w-4" />}
+                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
             </Button>
         </div>
     )
@@ -91,7 +92,7 @@ export default function AnnouncementPage() {
     const handleUploadSuccess = async (assessmentId: string, fileUrl: string) => {
         const assessmentToUpdate = assessments.find(a => a.id === assessmentId);
         if (!assessmentToUpdate) return;
-        
+
         const updatedAssessment: Assessment = {
             ...assessmentToUpdate,
             announcementDecisionUrl: fileUrl,
